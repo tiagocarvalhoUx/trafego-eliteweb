@@ -61,7 +61,17 @@ export const videoService = {
         }
       );
 
-      const videoUrl = Array.isArray(output) ? (output[0] as unknown as string) : (output as unknown as string);
+      // Replicate SDK v1.x returns FileOutput objects for file outputs.
+      // Extract the URL string regardless of format (string, URL, FileOutput).
+      function extractUrl(val: unknown): string {
+        if (typeof val === 'string') return val;
+        if (val instanceof URL) return val.href;
+        if (val && typeof (val as any).url === 'function') return String((val as any).url());
+        if (val && typeof (val as any).href === 'string') return (val as any).href;
+        return String(val);
+      }
+      const raw = Array.isArray(output) ? output[0] : output;
+      const videoUrl = extractUrl(raw);
 
       await pool.query(
         `UPDATE video_jobs SET status='done', video_url=$1, updated_at=NOW() WHERE id=$2`,
