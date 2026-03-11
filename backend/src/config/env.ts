@@ -29,6 +29,10 @@ export const env = {
 
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
 
+  google: {
+    apiKey: process.env.GOOGLE_API_KEY || '',
+  },
+
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: parseInt(process.env.SMTP_PORT || '587', 10),

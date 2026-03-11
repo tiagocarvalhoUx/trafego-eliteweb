@@ -158,6 +158,32 @@ async function migrate(): Promise<void> {
       );
     `);
 
+    // Video Jobs
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS video_jobs (
+        id SERIAL PRIMARY KEY,
+        usuario_id INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+        prompt_tema TEXT NOT NULL,
+        prompt_estilo VARCHAR(100),
+        prompt_tom VARCHAR(100),
+        prompt_publico VARCHAR(200),
+        prompt_elementos TEXT,
+        prompt_musica VARCHAR(100),
+        prompt_cta TEXT,
+        plataformas VARCHAR(100),
+        status VARCHAR(30) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'done', 'failed')),
+        video_url TEXT,
+        thumbnail_url TEXT,
+        google_operation_id TEXT,
+        publicado_instagram BOOLEAN DEFAULT FALSE,
+        publicado_tiktok BOOLEAN DEFAULT FALSE,
+        error_msg TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_video_jobs_usuario ON video_jobs(usuario_id);`);
+
     console.log('✅ Migrations executed successfully! All tables created.');
   } catch (error) {
     console.error('❌ Migration failed:', error);

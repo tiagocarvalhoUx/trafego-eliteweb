@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { automationService } from '$lib/services/automationService';
   import { socialService } from '$lib/services/socialService';
+  import { videoService } from '$lib/services/videoService';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import { toast } from '$lib/stores/notifications';
@@ -9,10 +10,24 @@
   let automations: any[] = [];
   let goals: any[] = [];
   let accounts: any[] = [];
+  let videoJobs: any[] = [];
   let loading = true;
   let showCreateForm = false;
   let showGoalForm = false;
+  let showVideoForm = false;
   let runningCycle = false;
+  let generatingVideo = false;
+
+  let newVideo = {
+    tema: '',
+    estilo: '',
+    tom: '',
+    publico: '',
+    elementos: '',
+    musica: '',
+    cta: '',
+    plataformas: 'Instagram Reels, TikTok',
+  };
 
   let newAutomation = {
     conta_id: '',
@@ -33,10 +48,11 @@
 
   onMount(async () => {
     try {
-      [automations, goals, accounts] = await Promise.all([
+      [automations, goals, accounts, videoJobs] = await Promise.all([
         automationService.getAutomations(),
         automationService.getGoals(),
         socialService.getAccounts(),
+        videoService.listJobs(),
       ]);
     } catch {
       toast.error('Erro ao carregar automações');
@@ -44,6 +60,48 @@
       loading = false;
     }
   });
+
+  async function handleCreateVideo() {
+    if (!newVideo.tema.trim()) {
+      toast.error('O tema do vídeo é obrigatório');
+      return;
+    }
+    generatingVideo = true;
+    try {
+      await videoService.createJob(newVideo);
+      videoJobs = await videoService.listJobs();
+      showVideoForm = false;
+      newVideo = { tema: '', estilo: '', tom: '', publico: '', elementos: '', musica: '', cta: '', plataformas: 'Instagram Reels, TikTok' };
+      toast.success('Geração de vídeo iniciada! Atualize a página em alguns minutos.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? 'Erro ao iniciar geração de vídeo');
+    } finally {
+      generatingVideo = false;
+    }
+  }
+
+  async function handleRefreshJobs() {
+    videoJobs = await videoService.listJobs();
+  }
+
+  async function handleDeleteVideo(id: number) {
+    if (!confirm('Remover este vídeo?')) return;
+    try {
+      await videoService.deleteJob(id);
+      videoJobs = videoJobs.filter((v) => v.id !== id);
+      toast.success('Vídeo removido');
+    } catch {
+      toast.error('Erro ao remover vídeo');
+    }
+  }
+
+  function statusLabel(status: string): string {
+    return { pending: 'Aguardando', processing: 'Gerando...', done: 'Pronto', failed: 'Falhou' }[status] ?? status;
+  }
+
+  function statusColor(status: string): string {
+    return { pending: 'badge-gray', processing: 'badge-blue', done: 'badge-green', failed: 'badge-red' }[status] ?? 'badge-gray';
+  }
 
   async function handleCreateAutomation() {
     try {
@@ -215,6 +273,128 @@
               >
                 Remover
               </button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </div>
+
+  <!-- AI Video Section -->
+  <div class="mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-lg font-semibold text-white">Gerar Vídeo com IA</h2>
+        <p class="text-gray-500 text-xs mt-0.5">Powered by Google Veo 2</p>
+      </div>
+      <div class="flex gap-2">
+        <button on:click={handleRefreshJobs} class="btn-secondary text-sm">↻ Atualizar</button>
+        <button on:click={() => (showVideoForm = !showVideoForm)} class="btn-primary text-sm">
+          + Gerar Vídeo com IA
+        </button>
+      </div>
+    </div>
+
+    {#if showVideoForm}
+      <div class="card mb-4 border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
+        <h3 class="text-base font-semibold text-white mb-4">Nova Automação de Vídeo</h3>
+        <form on:submit|preventDefault={handleCreateVideo} class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="md:col-span-2">
+            <label class="block text-sm text-gray-300 mb-1.5">Tema do vídeo <span class="text-red-400">*</span></label>
+            <input
+              bind:value={newVideo.tema}
+              class="input"
+              placeholder='Ex: "5 Dicas para Aumentar Engajamento no Instagram"'
+              required
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">Estilo Visual</label>
+            <input bind:value={newVideo.estilo} class="input" placeholder="Ex: Animado, Realista, Minimalista" />
+          </div>
+
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">Tom</label>
+            <input bind:value={newVideo.tom} class="input" placeholder="Ex: Inspirador, Informativo, Promocional" />
+          </div>
+
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">Público-alvo</label>
+            <input bind:value={newVideo.publico} class="input" placeholder="Ex: Empreendedores, Jovens de 18-25 anos" />
+          </div>
+
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">Música de Fundo</label>
+            <input bind:value={newVideo.musica} class="input" placeholder="Ex: Otimista e motivacional, Energética" />
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-sm text-gray-300 mb-1.5">Elementos Chave</label>
+            <input bind:value={newVideo.elementos} class="input" placeholder="Ex: Ícones de redes sociais, gráficos de crescimento, pessoa sorrindo" />
+          </div>
+
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">Chamada para Ação (CTA)</label>
+            <input bind:value={newVideo.cta} class="input" placeholder='Ex: "Siga para mais dicas!", "Link na bio"' />
+          </div>
+
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">Plataformas</label>
+            <input bind:value={newVideo.plataformas} class="input" placeholder="Instagram Reels, TikTok" />
+          </div>
+
+          <div class="md:col-span-2 flex gap-3">
+            <button type="submit" disabled={generatingVideo} class="btn-primary">
+              {generatingVideo ? 'Iniciando...' : '✨ Gerar Vídeo'}
+            </button>
+            <button type="button" on:click={() => (showVideoForm = false)} class="btn-secondary">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    {/if}
+
+    {#if videoJobs.length === 0}
+      <div class="card text-center py-12">
+        <p class="text-gray-400 text-4xl mb-3">🎬</p>
+        <p class="text-gray-400">Nenhum vídeo gerado ainda</p>
+        <p class="text-gray-500 text-sm mt-1">Clique em "+ Gerar Vídeo com IA" para criar seu primeiro vídeo</p>
+      </div>
+    {:else}
+      <div class="space-y-3">
+        {#each videoJobs as job}
+          <div class="card">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-2xl shrink-0">
+                🎬
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <p class="text-white font-medium truncate">{job.prompt_tema}</p>
+                  <span class="badge {statusColor(job.status)}">{statusLabel(job.status)}</span>
+                </div>
+                <p class="text-gray-500 text-xs">
+                  {job.prompt_estilo ? `Estilo: ${job.prompt_estilo} · ` : ''}
+                  {job.plataformas ?? ''}
+                </p>
+                <p class="text-gray-600 text-xs mt-1">{new Date(job.created_at).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</p>
+                {#if job.status === 'failed' && job.error_msg}
+                  <p class="text-red-400 text-xs mt-1">Erro: {job.error_msg}</p>
+                {/if}
+              </div>
+              <div class="flex gap-2 shrink-0">
+                {#if job.status === 'done' && job.video_url}
+                  <a href={job.video_url} target="_blank" rel="noopener" class="btn-secondary text-xs py-1.5 px-3">
+                    ▶ Ver vídeo
+                  </a>
+                {/if}
+                <button
+                  on:click={() => handleDeleteVideo(job.id)}
+                  class="text-xs px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  Remover
+                </button>
+              </div>
             </div>
           </div>
         {/each}

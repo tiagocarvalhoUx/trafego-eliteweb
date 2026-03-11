@@ -13,6 +13,7 @@ import socialRoutes from './routes/social';
 import analyticsRoutes from './routes/analytics';
 import leadsRoutes from './routes/leads';
 import automationRoutes from './routes/automation';
+import videoRoutes from './routes/video';
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use('/api/social', socialRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/leads', leadsRoutes);
 app.use('/api/automation', automationRoutes);
+app.use('/api/video', videoRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

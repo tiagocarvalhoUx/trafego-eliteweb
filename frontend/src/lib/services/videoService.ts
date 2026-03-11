@@ -1,0 +1,33 @@
+import api from './api';
+
+export interface VideoJobInput {
+  tema: string;
+  estilo?: string;
+  tom?: string;
+  publico?: string;
+  elementos?: string;
+  musica?: string;
+  cta?: string;
+  plataformas?: string;
+}
+
+export const videoService = {
+  async listJobs(): Promise<any[]> {
+    const { data } = await api.get('/video');
+    return data.data;
+  },
+
+  async createJob(input: VideoJobInput): Promise<{ jobId: number }> {
+    const { data } = await api.post('/video', input);
+    return data.data;
+  },
+
+  async getJob(id: number): Promise<any> {
+    const { data } = await api.get(`/video/${id}`);
+    return data.data;
+  },
+
+  async deleteJob(id: number): Promise<void> {
+    await api.delete(`/video/${id}`);
+  },
+};
