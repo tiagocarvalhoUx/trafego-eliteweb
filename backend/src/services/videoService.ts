@@ -1,9 +1,8 @@
 /**
  * Video Generation Service
- * Uses Replicate API (minimax/video-01) for AI video generation
+ * Uses Pixverse API for AI video generation
  * Videos are stored permanently in Supabase Storage
  */
-import Replicate from 'replicate';
 import { createClient } from '@supabase/supabase-js';
 import pool from '../config/database';
 import { env } from '../config/env';
@@ -26,16 +25,8 @@ function buildPrompt(data: VideoPromptData): string {
   if (data.publico) parts.push(`Target audience: ${data.publico}.`);
   if (data.elementos) parts.push(`Key elements: ${data.elementos}.`);
   if (data.cta) parts.push(`Call to action: ${data.cta}.`);
-  parts.push('Vertical format 9:16, high quality, engaging, up to 60 seconds.');
+  parts.push('Vertical format 9:16, high quality, engaging.');
   return parts.join(' ');
-}
-
-function extractUrl(val: unknown): string {
-  if (typeof val === 'string') return val;
-  if (val instanceof URL) return val.href;
-  if (val && typeof (val as any).url === 'function') return String((val as any).url());
-  if (val && typeof (val as any).href === 'string') return (val as any).href;
-  return String(val);
 }
 
 async function uploadToSupabase(videoUrl: string, userId: number): Promise<string> {
@@ -53,13 +44,76 @@ async function uploadToSupabase(videoUrl: string, userId: number): Promise<strin
       .from('videos')
       .upload(filename, videoBytes, { contentType: 'video/mp4', upsert: false });
 
-    if (error) return videoUrl; // fallback to original URL on error
+    if (error) return videoUrl;
 
     const { data } = supabase.storage.from('videos').getPublicUrl(filename);
     return data.publicUrl;
   } catch {
-    return videoUrl; // fallback to original URL on any error
+    return videoUrl;
   }
+}
+
+async function generateWithPixverse(prompt: string): Promise<string> {
+  const headers = {
+    'API-KEY': env.pixverse.apiKey,
+    'Content-Type': 'application/json',
+    'Ai-trial-code': 'AIWEB03',
+  };
+
+  // Create text-to-video job
+  const createRes = await fetch('https://api-sg.pixverse.ai/openapi/v2/video/text2video/create', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      prompt,
+      model: 'v4',
+      quality: 'standard',
+      duration: 5,
+      aspect_ratio: '9:16',
+    }),
+  });
+
+  if (!createRes.ok) {
+    const err = await createRes.text();
+    throw new Error(`Pixverse create error ${createRes.status}: ${err}`);
+  }
+
+  const createData = await createRes.json() as any;
+  if (createData.ErrCode !== 0) {
+    throw new Error(`Pixverse error: ${createData.ErrMsg || JSON.stringify(createData)}`);
+  }
+
+  const videoId = createData.Resp?.video_id;
+  if (!videoId) {
+    throw new Error(`Pixverse: no video_id returned. Response: ${JSON.stringify(createData)}`);
+  }
+
+  // Poll status up to 10 minutes (120 attempts × 5s)
+  for (let attempt = 0; attempt < 120; attempt++) {
+    await new Promise((r) => setTimeout(r, 5000));
+
+    const statusRes = await fetch(`https://api-sg.pixverse.ai/openapi/v2/video/result/${videoId}`, {
+      headers,
+    });
+
+    if (!statusRes.ok) continue;
+
+    const statusData = await statusRes.json() as any;
+    if (statusData.ErrCode !== 0) continue;
+
+    const resp = statusData.Resp;
+    const status = resp?.status;
+
+    if (status === 'success' && resp?.video_url) {
+      return resp.video_url;
+    }
+    if (status === 'failed') {
+      throw new Error(`Pixverse generation failed: ${resp?.err_msg || 'Unknown error'}`);
+    }
+    // status generating/waiting → keep polling
+  }
+
+  throw new Error('Pixverse: timeout waiting for video generation');
 }
 
 export const videoService = {
@@ -81,18 +135,10 @@ export const videoService = {
     await pool.query(`UPDATE video_jobs SET status='processing', updated_at=NOW() WHERE id=$1`, [jobId]);
 
     try {
-      const replicate = new Replicate({ auth: env.replicate.apiToken });
-
-      const output = await replicate.run(
-        'minimax/video-01' as `${string}/${string}`,
-        { input: { prompt, prompt_optimizer: true } }
-      );
-
-      const raw = Array.isArray(output) ? output[0] : output;
-      const replicateUrl = extractUrl(raw);
+      const pixverseUrl = await generateWithPixverse(prompt);
 
       // Upload to Supabase Storage for permanent hosting
-      const videoUrl = await uploadToSupabase(replicateUrl, usuarioId);
+      const videoUrl = await uploadToSupabase(pixverseUrl, usuarioId);
 
       await pool.query(
         `UPDATE video_jobs SET status='done', video_url=$1, updated_at=NOW() WHERE id=$2`,

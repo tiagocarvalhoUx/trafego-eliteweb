@@ -29,8 +29,13 @@ export const env = {
 
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
 
-  replicate: {
-    apiToken: process.env.REPLICATE_API_TOKEN || '',
+  falai: {
+    apiKey: process.env.FAL_KEY || '',
+    model: process.env.FAL_VIDEO_MODEL || 'fal-ai/minimax-video-01',
+  },
+
+  pixverse: {
+    apiKey: process.env.PIXVERSE_API_KEY || '',
   },
 
   supabase: {
