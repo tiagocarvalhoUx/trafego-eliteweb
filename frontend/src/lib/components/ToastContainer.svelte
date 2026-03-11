@@ -16,7 +16,7 @@
   };
 </script>
 
-<div class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80">
+<div class="fixed top-16 lg:top-4 right-2 lg:right-4 z-50 flex flex-col gap-2 w-[calc(100vw-1rem)] sm:w-80 max-w-sm">
   {#each $toasts as toast (toast.id)}
     <div
       class="flex items-start gap-3 p-4 rounded-lg border {colorMap[toast.type]}

@@ -79,22 +79,16 @@
   <title>Analytics - Social Analytics</title>
 </svelte:head>
 
-<div class="flex items-center justify-between mb-8">
+<div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
   <PageHeader title="Analytics" subtitle="Métricas detalhadas de engajamento e crescimento" />
 
-  <div class="flex items-center gap-3 mb-8">
-    <!-- Period selector -->
-    <select
-      bind:value={period}
-      on:change={loadData}
-      class="input w-auto text-sm"
-    >
+  <div class="flex items-center gap-2 flex-wrap shrink-0">
+    <select bind:value={period} on:change={loadData} class="input w-auto text-sm">
       <option value={7}>7 dias</option>
       <option value={14}>14 dias</option>
       <option value={30}>30 dias</option>
       <option value={90}>90 dias</option>
     </select>
-
     <button on:click={handleExportCSV} disabled={exportingCSV} class="btn-secondary text-sm">
       {exportingCSV ? 'Exportando...' : '📥 CSV'}
     </button>
