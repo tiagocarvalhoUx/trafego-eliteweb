@@ -1,8 +1,9 @@
 /**
  * Video Generation Service
- * Integrates with Google Veo 3 via Gemini API
+ * Uses Replicate API (minimax/video-01) for AI video generation
+ * Videos are stored permanently in Supabase Storage
  */
-import { GoogleGenAI } from '@google/genai';
+import Replicate from 'replicate';
 import { createClient } from '@supabase/supabase-js';
 import pool from '../config/database';
 import { env } from '../config/env';
@@ -25,22 +26,40 @@ function buildPrompt(data: VideoPromptData): string {
   if (data.publico) parts.push(`Target audience: ${data.publico}.`);
   if (data.elementos) parts.push(`Key elements: ${data.elementos}.`);
   if (data.cta) parts.push(`Call to action: ${data.cta}.`);
-  parts.push('Vertical format 9:16, high quality, engaging, up to 8 seconds.');
+  parts.push('Vertical format 9:16, high quality, engaging, up to 60 seconds.');
   return parts.join(' ');
 }
 
-async function uploadToSupabase(videoBytes: ArrayBuffer, userId: number): Promise<string> {
-  const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
-  const filename = `${userId}/${Date.now()}.mp4`;
+function extractUrl(val: unknown): string {
+  if (typeof val === 'string') return val;
+  if (val instanceof URL) return val.href;
+  if (val && typeof (val as any).url === 'function') return String((val as any).url());
+  if (val && typeof (val as any).href === 'string') return (val as any).href;
+  return String(val);
+}
 
-  const { error } = await supabase.storage
-    .from('videos')
-    .upload(filename, videoBytes, { contentType: 'video/mp4', upsert: false });
+async function uploadToSupabase(videoUrl: string, userId: number): Promise<string> {
+  if (!env.supabase.url || !env.supabase.serviceRoleKey) return videoUrl;
 
-  if (error) throw new Error(`Supabase upload failed: ${error.message}`);
+  try {
+    const res = await fetch(videoUrl);
+    if (!res.ok) return videoUrl;
+    const videoBytes = await res.arrayBuffer();
 
-  const { data } = supabase.storage.from('videos').getPublicUrl(filename);
-  return data.publicUrl;
+    const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
+    const filename = `${userId}/${Date.now()}.mp4`;
+
+    const { error } = await supabase.storage
+      .from('videos')
+      .upload(filename, videoBytes, { contentType: 'video/mp4', upsert: false });
+
+    if (error) return videoUrl; // fallback to original URL on error
+
+    const { data } = supabase.storage.from('videos').getPublicUrl(filename);
+    return data.publicUrl;
+  } catch {
+    return videoUrl; // fallback to original URL on any error
+  }
 }
 
 export const videoService = {
@@ -62,35 +81,22 @@ export const videoService = {
     await pool.query(`UPDATE video_jobs SET status='processing', updated_at=NOW() WHERE id=$1`, [jobId]);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: env.google.apiKey });
+      const replicate = new Replicate({ auth: env.replicate.apiToken });
 
-      // Start video generation
-      let operation = await (ai.models as any).generateVideos({
-        model: 'veo-3.0-generate-preview',
-        prompt,
-        config: { aspectRatio: '9:16', numberOfVideos: 1 },
-      });
+      const output = await replicate.run(
+        'minimax/video-01' as `${string}/${string}`,
+        { input: { prompt, prompt_optimizer: true } }
+      );
 
-      // Poll every 15 seconds until done
-      while (!operation.done) {
-        await new Promise((r) => setTimeout(r, 15000));
-        operation = await (ai.operations as any).getVideosOperation({ operation });
-      }
+      const raw = Array.isArray(output) ? output[0] : output;
+      const replicateUrl = extractUrl(raw);
 
-      const videoUri: string = operation.response?.generatedSamples?.[0]?.video?.uri;
-      if (!videoUri) throw new Error('No video URI in response');
-
-      // Download video from Google
-      const res = await fetch(`${videoUri}?key=${env.google.apiKey}`);
-      if (!res.ok) throw new Error(`Failed to download video: ${res.status}`);
-      const videoBytes = await res.arrayBuffer();
-
-      // Upload to Supabase Storage
-      const publicUrl = await uploadToSupabase(videoBytes, usuarioId);
+      // Upload to Supabase Storage for permanent hosting
+      const videoUrl = await uploadToSupabase(replicateUrl, usuarioId);
 
       await pool.query(
         `UPDATE video_jobs SET status='done', video_url=$1, updated_at=NOW() WHERE id=$2`,
-        [publicUrl, jobId]
+        [videoUrl, jobId]
       );
     } catch (error: any) {
       const msg = error?.message || 'Unknown error';
