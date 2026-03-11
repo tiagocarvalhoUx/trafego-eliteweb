@@ -313,7 +313,7 @@
     <div class="flex items-center justify-between mb-4">
       <div>
         <h2 class="text-lg font-semibold text-white">Gerar Vídeo com IA</h2>
-        <p class="text-gray-500 text-xs mt-0.5">Powered by Replicate AI</p>
+        <p class="text-gray-500 text-xs mt-0.5">Powered by Google Veo 3</p>
       </div>
       <div class="flex gap-2">
         <button on:click={handleRefreshJobs} class="btn-secondary text-sm">↻ Atualizar</button>

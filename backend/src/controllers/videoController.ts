@@ -26,7 +26,7 @@ export const videoController = {
       });
 
       // Start generation in background
-      videoService.startGeneration(jobId, { tema, estilo, tom, publico, elementos, musica, cta, plataformas })
+      videoService.startGeneration(jobId, { tema, estilo, tom, publico, elementos, musica, cta, plataformas }, req.userId!)
         .catch(console.error);
 
       res.status(201).json({
