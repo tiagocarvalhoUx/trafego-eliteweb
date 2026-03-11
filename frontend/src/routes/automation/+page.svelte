@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { automationService } from '$lib/services/automationService';
   import { socialService } from '$lib/services/socialService';
   import { videoService } from '$lib/services/videoService';
@@ -46,6 +46,30 @@
     data_fim: '',
   };
 
+  let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+  function hasActiveJobs(): boolean {
+    return videoJobs.some((j) => j.status === 'pending' || j.status === 'processing');
+  }
+
+  function startPolling() {
+    if (pollInterval) return;
+    pollInterval = setInterval(async () => {
+      const prev = JSON.stringify(videoJobs.map((j) => j.status));
+      videoJobs = await videoService.listJobs();
+      const next = JSON.stringify(videoJobs.map((j) => j.status));
+      if (next !== prev) {
+        const justDone = videoJobs.filter((j) => j.status === 'done');
+        if (justDone.length > 0) toast.success('Vídeo gerado com sucesso!');
+      }
+      if (!hasActiveJobs()) stopPolling();
+    }, 5000);
+  }
+
+  function stopPolling() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  }
+
   onMount(async () => {
     try {
       [automations, goals, accounts, videoJobs] = await Promise.all([
@@ -54,12 +78,15 @@
         socialService.getAccounts(),
         videoService.listJobs(),
       ]);
+      if (hasActiveJobs()) startPolling();
     } catch {
       toast.error('Erro ao carregar automações');
     } finally {
       loading = false;
     }
   });
+
+  onDestroy(() => stopPolling());
 
   async function handleCreateVideo() {
     if (!newVideo.tema.trim()) {
@@ -72,7 +99,8 @@
       videoJobs = await videoService.listJobs();
       showVideoForm = false;
       newVideo = { tema: '', estilo: '', tom: '', publico: '', elementos: '', musica: '', cta: '', plataformas: 'Instagram Reels, TikTok' };
-      toast.success('Geração de vídeo iniciada! Atualize a página em alguns minutos.');
+      toast.success('Geração iniciada! O vídeo aparecerá aqui automaticamente.');
+      startPolling();
     } catch (err: any) {
       toast.error(err.response?.data?.message ?? 'Erro ao iniciar geração de vídeo');
     } finally {
@@ -363,11 +391,16 @@
     {:else}
       <div class="space-y-3">
         {#each videoJobs as job}
-          <div class="card">
+          <div class="card overflow-hidden">
             <div class="flex items-start gap-4">
-              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-2xl shrink-0">
+              <!-- Icon / mini thumbnail -->
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-2xl shrink-0 relative">
                 🎬
+                {#if job.status === 'pending' || job.status === 'processing'}
+                  <span class="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping"></span>
+                {/if}
               </div>
+
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1 flex-wrap">
                   <p class="text-white font-medium truncate">{job.prompt_tema}</p>
@@ -382,10 +415,11 @@
                   <p class="text-red-400 text-xs mt-1">Erro: {job.error_msg}</p>
                 {/if}
               </div>
+
               <div class="flex gap-2 shrink-0">
                 {#if job.status === 'done' && job.video_url}
                   <a href={job.video_url} target="_blank" rel="noopener" class="btn-secondary text-xs py-1.5 px-3">
-                    ▶ Ver vídeo
+                    ↗ Abrir
                   </a>
                 {/if}
                 <button
@@ -396,6 +430,33 @@
                 </button>
               </div>
             </div>
+
+            <!-- Progress bar while generating -->
+            {#if job.status === 'pending' || job.status === 'processing'}
+              <div class="mt-4">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                  <p class="text-blue-300 text-xs">Gerando vídeo com IA... isso pode levar alguns minutos</p>
+                </div>
+                <div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full animate-[shimmer_2s_linear_infinite] bg-[length:200%_100%]"></div>
+                </div>
+              </div>
+            {/if}
+
+            <!-- Inline video player when done -->
+            {#if job.status === 'done' && job.video_url}
+              <div class="mt-4">
+                <video
+                  src={job.video_url}
+                  controls
+                  class="w-full max-h-96 rounded-xl bg-black object-contain"
+                  preload="metadata"
+                >
+                  <track kind="captions" />
+                </video>
+              </div>
+            {/if}
           </div>
         {/each}
       </div>
