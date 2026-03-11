@@ -54,22 +54,25 @@ async function uploadToSupabase(videoUrl: string, userId: number): Promise<strin
 }
 
 async function generateWithPixverse(prompt: string): Promise<string> {
+  const traceId = crypto.randomUUID();
   const headers = {
     'API-KEY': env.pixverse.apiKey,
     'Content-Type': 'application/json',
-    'Ai-trial-code': 'AIWEB03',
+    'Ai-trace-id': traceId,
   };
 
   // Create text-to-video job
-  const createRes = await fetch('https://api-sg.pixverse.ai/openapi/v2/video/text2video/create', {
+  const createRes = await fetch('https://app-api.pixverse.ai/openapi/v2/video/text/generate', {
     method: 'POST',
     headers,
     body: JSON.stringify({
       prompt,
-      model: 'v4',
-      quality: 'standard',
+      model: 'v4.5',
+      quality: '540p',
       duration: 5,
       aspect_ratio: '9:16',
+      motion_mode: 'normal',
+      water_mark: false,
     }),
   });
 
@@ -89,11 +92,12 @@ async function generateWithPixverse(prompt: string): Promise<string> {
   }
 
   // Poll status up to 10 minutes (120 attempts × 5s)
+  // Status: 1=success, 5=waiting, 7=moderation fail, 8=failed
   for (let attempt = 0; attempt < 120; attempt++) {
     await new Promise((r) => setTimeout(r, 5000));
 
-    const statusRes = await fetch(`https://api-sg.pixverse.ai/openapi/v2/video/result/${videoId}`, {
-      headers,
+    const statusRes = await fetch(`https://app-api.pixverse.ai/openapi/v2/video/result/${videoId}`, {
+      headers: { 'API-KEY': env.pixverse.apiKey, 'Ai-trace-id': crypto.randomUUID() },
     });
 
     if (!statusRes.ok) continue;
@@ -104,13 +108,16 @@ async function generateWithPixverse(prompt: string): Promise<string> {
     const resp = statusData.Resp;
     const status = resp?.status;
 
-    if (status === 'success' && resp?.video_url) {
-      return resp.video_url;
+    if (status === 1 && resp?.url) {
+      return resp.url;
     }
-    if (status === 'failed') {
-      throw new Error(`Pixverse generation failed: ${resp?.err_msg || 'Unknown error'}`);
+    if (status === 7) {
+      throw new Error('Pixverse: content moderation failure');
     }
-    // status generating/waiting → keep polling
+    if (status === 8) {
+      throw new Error(`Pixverse generation failed`);
+    }
+    // status === 5 → keep polling
   }
 
   throw new Error('Pixverse: timeout waiting for video generation');
