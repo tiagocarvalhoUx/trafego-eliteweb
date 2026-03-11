@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version)",
+      "Bash(npm --version)",
+      "Bash(npm audit --json)",
+      "Bash(node -e \"const d=require\\(''fs''\\).readFileSync\\(''/dev/stdin'',''utf8''\\); const j=JSON.parse\\(d\\); Object.values\\(j.vulnerabilities||{}\\).filter\\(v=>v.severity===''high''||v.severity===''critical''\\).forEach\\(v=>console.log\\(v.severity.toUpperCase\\(\\), v.name, v.via?.map?.\\(x=>typeof x===''string''?x:x.title\\).join\\('', ''\\)\\)\\)\")",
+      "Bash(npm audit)",
+      "Bash(powershell -Command \"Get-Service | Where-Object {$_Name -like ''*mysql*'' -or $_DisplayName -like ''*mysql*''} | Select-Object Name, DisplayName, Status\")",
+      "Bash(sc queryex type=service state=all)",
+      "Bash(net start)",
+      "Bash(mysql -u root -P 3306 -e \"SELECT user, plugin FROM mysql.user WHERE user=''root'';\")",
+      "Bash(mysql -u root -P 3306 -e \":*)",
+      "Bash(powershell -NoProfile -NonInteractive -Command \"Start-Process powershell -Verb RunAs -ArgumentList ''-NoProfile -NonInteractive -Command \"\"net stop MariaDB; Start-Sleep 3; net start MariaDB; Start-Sleep 2\"\"'' -Wait\")",
+      "Bash(mysql -u root -P 3306 -e \"SELECT user, host, JSON_VALUE\\(priv, ''$.plugin''\\) AS plugin FROM mysql.global_priv WHERE user=''root'';\")",
+      "Bash(mysql -u:*)",
+      "Bash(echo \"Done: $?\")",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(curl -s http://localhost:3001/health)",
+      "Bash(npm install)"
+    ]
+  }
+}
