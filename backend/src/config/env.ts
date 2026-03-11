@@ -29,8 +29,8 @@ export const env = {
 
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
 
-  google: {
-    apiKey: process.env.GOOGLE_API_KEY || '',
+  replicate: {
+    apiToken: process.env.REPLICATE_API_TOKEN || '',
   },
 
   smtp: {
