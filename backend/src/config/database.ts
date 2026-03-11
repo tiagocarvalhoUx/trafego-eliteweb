@@ -1,5 +1,9 @@
 import { Pool } from 'pg';
+import dns from 'dns';
 import { env } from './env';
+
+// Force IPv4 to avoid ENETUNREACH on IPv6-only hosts (e.g. Render)
+dns.setDefaultResultOrder('ipv4first');
 
 const pool = new Pool({
   connectionString: env.db.url,
