@@ -14,11 +14,11 @@ export function startDataCollectionCron(): void {
     console.log('⏰ [CRON] Starting daily data collection...');
 
     try {
-      const [contas] = await pool.query(
+      const { rows: contas } = await pool.query(
         `SELECT id, plataforma, access_token FROM contas_sociais WHERE ativo = true`
       );
 
-      for (const conta of contas as any[]) {
+      for (const conta of contas) {
         try {
           if (conta.plataforma === 'instagram') {
             await analyticsService.collectInstagramData(conta.id, conta.access_token);

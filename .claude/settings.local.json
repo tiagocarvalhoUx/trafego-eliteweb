@@ -17,7 +17,8 @@
       "Bash(echo \"Done: $?\")",
       "Bash(taskkill //F //IM node.exe)",
       "Bash(curl -s http://localhost:3001/health)",
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(npm install pg @types/pg)"
     ]
   }
 }

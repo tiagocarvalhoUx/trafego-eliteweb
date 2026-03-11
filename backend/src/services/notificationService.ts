@@ -21,17 +21,17 @@ export const notificationService = {
     mensagem: string
   ): Promise<void> {
     await pool.query(
-      'INSERT INTO notificacoes (usuario_id, tipo, titulo, mensagem) VALUES (?, ?, ?, ?)',
+      'INSERT INTO notificacoes (usuario_id, tipo, titulo, mensagem) VALUES ($1, $2, $3, $4)',
       [usuarioId, tipo, titulo, mensagem]
     );
   },
 
   // Get unread notifications for a user
   async getNotifications(usuarioId: number) {
-    const [rows] = await pool.query(
+    const { rows } = await pool.query(
       `SELECT id, tipo, titulo, mensagem, lida, data_criacao
        FROM notificacoes
-       WHERE usuario_id = ?
+       WHERE usuario_id = $1
        ORDER BY data_criacao DESC
        LIMIT 50`,
       [usuarioId]
@@ -42,14 +42,14 @@ export const notificationService = {
   // Mark notification as read
   async markAsRead(notificationId: number, usuarioId: number): Promise<void> {
     await pool.query(
-      'UPDATE notificacoes SET lida = true WHERE id = ? AND usuario_id = ?',
+      'UPDATE notificacoes SET lida = true WHERE id = $1 AND usuario_id = $2',
       [notificationId, usuarioId]
     );
   },
 
   // Mark all as read
   async markAllAsRead(usuarioId: number): Promise<void> {
-    await pool.query('UPDATE notificacoes SET lida = true WHERE usuario_id = ?', [usuarioId]);
+    await pool.query('UPDATE notificacoes SET lida = true WHERE usuario_id = $1', [usuarioId]);
   },
 
   // Send email notification
@@ -70,7 +70,7 @@ export const notificationService = {
 
   // Check follower growth alerts (called by cron)
   async checkFollowerAlerts(): Promise<void> {
-    const [rows] = await pool.query(
+    const { rows } = await pool.query(
       `SELECT
          cs.id as conta_id,
          cs.usuario_id,
@@ -91,7 +91,7 @@ export const notificationService = {
          AND (s_latest.total_seguidores - s_prev.total_seguidores) >= 100`
     );
 
-    for (const row of rows as any[]) {
+    for (const row of rows) {
       const crescimento = row.atual - row.anterior;
       await notificationService.createNotification(
         row.usuario_id,

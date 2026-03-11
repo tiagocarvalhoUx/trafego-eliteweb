@@ -3,42 +3,33 @@
  * Run with: npm run migrate
  * Creates all tables if they don't exist
  */
-import mysql from 'mysql2/promise';
+import { Client } from 'pg';
 import { env } from './env';
 
 async function migrate(): Promise<void> {
-  const conn = await mysql.createConnection({
-    host: env.db.host,
-    port: env.db.port,
-    user: env.db.user,
-    password: env.db.password,
-    multipleStatements: true,
-  });
+  const client = new Client({ connectionString: env.db.url, ssl: { rejectUnauthorized: false } });
+  await client.connect();
 
   try {
-    // Create database
-    await conn.query(`CREATE DATABASE IF NOT EXISTS \`${env.db.name}\``);
-    await conn.query(`USE \`${env.db.name}\``);
-
     // Usuarios
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         nome VARCHAR(100) NOT NULL,
         email VARCHAR(150) NOT NULL UNIQUE,
         senha_hash VARCHAR(255) NOT NULL,
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        ativo BOOLEAN DEFAULT TRUE,
-        INDEX idx_email (email)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ativo BOOLEAN DEFAULT TRUE
+      );
     `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);`);
 
     // Contas sociais
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS contas_sociais (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        usuario_id INT NOT NULL,
-        plataforma ENUM('instagram', 'tiktok') NOT NULL,
+        id SERIAL PRIMARY KEY,
+        usuario_id INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+        plataforma VARCHAR(20) NOT NULL CHECK (plataforma IN ('instagram', 'tiktok')),
         access_token TEXT NOT NULL,
         refresh_token TEXT,
         token_expires_at TIMESTAMP NULL,
@@ -46,16 +37,16 @@ async function migrate(): Promise<void> {
         conta_id_plataforma VARCHAR(100),
         data_conexao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         ativo BOOLEAN DEFAULT TRUE,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
-        INDEX idx_usuario (usuario_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        UNIQUE (usuario_id, conta_id_plataforma)
+      );
     `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_contas_usuario ON contas_sociais(usuario_id);`);
 
     // Posts
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS posts (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        conta_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        conta_id INT NOT NULL REFERENCES contas_sociais(id) ON DELETE CASCADE,
         id_post_plataforma VARCHAR(200) NOT NULL,
         data_postagem TIMESTAMP NULL,
         legenda TEXT,
@@ -63,18 +54,17 @@ async function migrate(): Promise<void> {
         url_midia VARCHAR(500),
         url_permalink VARCHAR(500),
         data_coleta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (conta_id) REFERENCES contas_sociais(id) ON DELETE CASCADE,
-        UNIQUE KEY uk_plataforma_post (conta_id, id_post_plataforma),
-        INDEX idx_conta (conta_id),
-        INDEX idx_data_postagem (data_postagem)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        UNIQUE (conta_id, id_post_plataforma)
+      );
     `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_posts_conta ON posts(conta_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_posts_data_postagem ON posts(data_postagem);`);
 
     // Engajamento
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS engajamento (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        post_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        post_id INT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
         data_coleta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         curtidas INT DEFAULT 0,
         comentarios INT DEFAULT 0,
@@ -82,96 +72,90 @@ async function migrate(): Promise<void> {
         visualizacoes INT DEFAULT 0,
         alcance INT DEFAULT 0,
         impressoes INT DEFAULT 0,
-        taxa_engajamento DECIMAL(5,2) DEFAULT 0.00,
-        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-        INDEX idx_post (post_id),
-        INDEX idx_data_coleta (data_coleta)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        taxa_engajamento DECIMAL(5,2) DEFAULT 0.00
+      );
     `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_engajamento_post ON engajamento(post_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_engajamento_data ON engajamento(data_coleta);`);
 
     // Seguidores
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS seguidores (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        conta_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        conta_id INT NOT NULL REFERENCES contas_sociais(id) ON DELETE CASCADE,
         total_seguidores INT DEFAULT 0,
         novos_seguidores INT DEFAULT 0,
         deixaram_de_seguir INT DEFAULT 0,
-        data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (conta_id) REFERENCES contas_sociais(id) ON DELETE CASCADE,
-        INDEX idx_conta (conta_id),
-        INDEX idx_data_registro (data_registro)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_seguidores_conta ON seguidores(conta_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_seguidores_data ON seguidores(data_registro);`);
 
     // Leads
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS leads (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        usuario_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        usuario_id INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
         nome VARCHAR(100),
         usuario_plataforma VARCHAR(100) NOT NULL,
-        plataforma ENUM('instagram', 'tiktok') NOT NULL,
+        plataforma VARCHAR(20) NOT NULL CHECK (plataforma IN ('instagram', 'tiktok')),
         origem VARCHAR(200),
         post_id INT,
         palavra_chave VARCHAR(100),
         mensagem_enviada TEXT,
         data_captura TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        status ENUM('novo', 'contatado', 'respondeu', 'convertido', 'descartado') DEFAULT 'novo',
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
-        INDEX idx_usuario (usuario_id),
-        INDEX idx_status (status),
-        INDEX idx_data_captura (data_captura)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        status VARCHAR(20) DEFAULT 'novo' CHECK (status IN ('novo', 'contatado', 'respondeu', 'convertido', 'descartado'))
+      );
     `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_leads_usuario ON leads(usuario_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_leads_data ON leads(data_captura);`);
 
     // Automações
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS automacoes (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        conta_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        conta_id INT NOT NULL REFERENCES contas_sociais(id) ON DELETE CASCADE,
         nome VARCHAR(100) NOT NULL,
-        tipo ENUM('comentario_keyword', 'dm_automatica', 'follow_back') NOT NULL,
+        tipo VARCHAR(30) NOT NULL CHECK (tipo IN ('comentario_keyword', 'dm_automatica', 'follow_back')),
         palavra_chave VARCHAR(100),
         mensagem_resposta TEXT,
         ativo BOOLEAN DEFAULT TRUE,
         total_disparos INT DEFAULT 0,
-        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (conta_id) REFERENCES contas_sociais(id) ON DELETE CASCADE,
-        INDEX idx_conta (conta_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_automacoes_conta ON automacoes(conta_id);`);
 
     // Notificações
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS notificacoes (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        usuario_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        usuario_id INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
         tipo VARCHAR(50) NOT NULL,
         titulo VARCHAR(200) NOT NULL,
         mensagem TEXT NOT NULL,
         lida BOOLEAN DEFAULT FALSE,
-        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
-        INDEX idx_usuario_lida (usuario_id, lida)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario_lida ON notificacoes(usuario_id, lida);`);
 
     // Metas de crescimento
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS metas (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        conta_id INT NOT NULL,
-        tipo ENUM('seguidores', 'engajamento', 'leads') NOT NULL,
+        id SERIAL PRIMARY KEY,
+        conta_id INT NOT NULL REFERENCES contas_sociais(id) ON DELETE CASCADE,
+        tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('seguidores', 'engajamento', 'leads')),
         valor_meta INT NOT NULL,
         valor_atual INT DEFAULT 0,
-        periodo ENUM('semanal', 'mensal') NOT NULL,
+        periodo VARCHAR(10) NOT NULL CHECK (periodo IN ('semanal', 'mensal')),
         data_inicio DATE NOT NULL,
         data_fim DATE NOT NULL,
         concluida BOOLEAN DEFAULT FALSE,
-        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (conta_id) REFERENCES contas_sociais(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     console.log('✅ Migrations executed successfully! All tables created.');
@@ -179,7 +163,7 @@ async function migrate(): Promise<void> {
     console.error('❌ Migration failed:', error);
     throw error;
   } finally {
-    await conn.end();
+    await client.end();
   }
 }
 

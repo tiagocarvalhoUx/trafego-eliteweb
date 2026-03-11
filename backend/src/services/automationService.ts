@@ -10,12 +10,11 @@ export const automationService = {
   // Check comments on a post for keywords and trigger DM
   async processInstagramComments(contaId: number, accessToken: string, postPlataformaId: string, postId: number, igUserId: string): Promise<void> {
     // Get active automations for this account
-    const [automRows] = await pool.query(
+    const { rows: automacoes } = await pool.query(
       `SELECT * FROM automacoes
-       WHERE conta_id = ? AND ativo = true AND tipo = 'comentario_keyword'`,
+       WHERE conta_id = $1 AND ativo = true AND tipo = 'comentario_keyword'`,
       [contaId]
     );
-    const automacoes = automRows as any[];
     if (automacoes.length === 0) return;
 
     console.log(`[Automation] Checking comments on post ${postPlataformaId} with ${automacoes.length} automations`);
@@ -31,27 +30,27 @@ export const automationService = {
           console.log(`[Automation] Keyword "${keyword}" matched in comment by @${comment.username}`);
 
           // Check if this user was already processed for this automation
-          const [existingLead] = await pool.query(
-            'SELECT id FROM leads WHERE usuario_plataforma = ? AND post_id = ? AND palavra_chave = ?',
+          const existingLead = await pool.query(
+            'SELECT id FROM leads WHERE usuario_plataforma = $1 AND post_id = $2 AND palavra_chave = $3',
             [comment.username, postId, automacao.palavra_chave]
           );
 
-          if ((existingLead as any[]).length > 0) {
+          if (existingLead.rows.length > 0) {
             console.log(`[Automation] @${comment.username} already processed, skipping`);
             continue;
           }
 
           // Get conta's usuario_id
-          const [contaRows] = await pool.query(
-            'SELECT usuario_id FROM contas_sociais WHERE id = ?',
+          const contaResult = await pool.query(
+            'SELECT usuario_id FROM contas_sociais WHERE id = $1',
             [contaId]
           );
-          const usuarioId = (contaRows as any[])[0]?.usuario_id;
+          const usuarioId = contaResult.rows[0]?.usuario_id;
 
           // Register lead
-          const [leadResult] = await pool.query(
+          const leadResult = await pool.query(
             `INSERT INTO leads (usuario_id, usuario_plataforma, plataforma, origem, post_id, palavra_chave, mensagem_enviada)
-             VALUES (?, ?, 'instagram', ?, ?, ?, ?)`,
+             VALUES ($1, $2, 'instagram', $3, $4, $5, $6) RETURNING id`,
             [
               usuarioId,
               comment.username,
@@ -78,14 +77,14 @@ export const automationService = {
 
                 // Update automation dispatch count
                 await pool.query(
-                  'UPDATE automacoes SET total_disparos = total_disparos + 1 WHERE id = ?',
+                  'UPDATE automacoes SET total_disparos = total_disparos + 1 WHERE id = $1',
                   [automacao.id]
                 );
 
                 // Update lead status to contacted
                 await pool.query(
-                  'UPDATE leads SET status = "contatado" WHERE id = ?',
-                  [(leadResult as any).insertId]
+                  "UPDATE leads SET status = 'contatado' WHERE id = $1",
+                  [leadResult.rows[0].id]
                 );
 
                 // Create notification
@@ -109,7 +108,7 @@ export const automationService = {
 
   // Run automation check for all active accounts
   async runAutomationCycle(): Promise<void> {
-    const [contaRows] = await pool.query(
+    const { rows: contas } = await pool.query(
       `SELECT cs.id, cs.access_token, cs.plataforma, cs.conta_id_plataforma
        FROM contas_sociais cs
        WHERE cs.ativo = true
@@ -117,19 +116,17 @@ export const automationService = {
            SELECT 1 FROM automacoes a WHERE a.conta_id = cs.id AND a.ativo = true
          )`
     );
-    const contas = contaRows as any[];
     console.log(`[Automation] Running cycle for ${contas.length} accounts`);
 
     for (const conta of contas) {
       if (conta.plataforma === 'instagram') {
         // Get recent posts for this account
-        const [postRows] = await pool.query(
+        const { rows: posts } = await pool.query(
           `SELECT id, id_post_plataforma FROM posts
-           WHERE conta_id = ?
-             AND data_postagem >= DATE_SUB(NOW(), INTERVAL 7 DAY)`,
+           WHERE conta_id = $1
+             AND data_postagem >= NOW() - INTERVAL '7 days'`,
           [conta.id]
         );
-        const posts = postRows as any[];
         console.log(`[Automation] Account ${conta.id} has ${posts.length} posts in last 7 days`);
 
         for (const post of posts) {

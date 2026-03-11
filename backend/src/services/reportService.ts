@@ -21,13 +21,13 @@ function toCSV(fields: { label: string; value: string }[], rows: any[]): string 
 export const reportService = {
   // Generate CSV report of leads
   async generateLeadsCSV(usuarioId: number): Promise<string> {
-    const [rows] = await pool.query(
+    const { rows } = await pool.query(
       `SELECT
          id, nome, usuario_plataforma as usuario, plataforma, origem,
-         DATE_FORMAT(data_captura, '%d/%m/%Y %H:%i') as data_captura,
+         TO_CHAR(data_captura, 'DD/MM/YYYY HH24:MI') as data_captura,
          status, palavra_chave
        FROM leads
-       WHERE usuario_id = ?
+       WHERE usuario_id = $1
        ORDER BY data_captura DESC`,
       [usuarioId]
     );
@@ -43,7 +43,7 @@ export const reportService = {
       { label: 'Palavra Chave', value: 'palavra_chave' },
     ];
 
-    return toCSV(fields, rows as any[]);
+    return toCSV(fields, rows);
   },
 
   // Generate CSV report of engagement metrics

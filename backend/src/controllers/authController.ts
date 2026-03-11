@@ -11,19 +11,19 @@ export const authController = {
     const { nome, email, senha } = req.body;
 
     try {
-      const [existing] = await pool.query('SELECT id FROM usuarios WHERE email = ?', [email]);
-      if ((existing as any[]).length > 0) {
+      const existing = await pool.query('SELECT id FROM usuarios WHERE email = $1', [email]);
+      if (existing.rows.length > 0) {
         res.status(409).json({ success: false, message: 'Email já cadastrado' });
         return;
       }
 
       const senha_hash = await bcrypt.hash(senha, 12);
-      const [result] = await pool.query(
-        'INSERT INTO usuarios (nome, email, senha_hash) VALUES (?, ?, ?)',
+      const result = await pool.query(
+        'INSERT INTO usuarios (nome, email, senha_hash) VALUES ($1, $2, $3) RETURNING id',
         [nome, email, senha_hash]
       );
 
-      const userId = (result as any).insertId;
+      const userId = result.rows[0].id;
       const token = jwt.sign({ id: userId, email }, env.jwt.secret, {
         expiresIn: env.jwt.expiresIn,
       } as jwt.SignOptions);
@@ -44,11 +44,10 @@ export const authController = {
     const { email, senha } = req.body;
 
     try {
-      const [rows] = await pool.query(
-        'SELECT id, nome, email, senha_hash, ativo FROM usuarios WHERE email = ?',
+      const { rows: users } = await pool.query(
+        'SELECT id, nome, email, senha_hash, ativo FROM usuarios WHERE email = $1',
         [email]
       );
-      const users = rows as any[];
 
       if (users.length === 0) {
         res.status(401).json({ success: false, message: 'Credenciais inválidas' });
@@ -89,11 +88,10 @@ export const authController = {
   // GET /api/auth/me
   async me(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const [rows] = await pool.query(
-        'SELECT id, nome, email, data_criacao FROM usuarios WHERE id = ?',
+      const { rows: users } = await pool.query(
+        'SELECT id, nome, email, data_criacao FROM usuarios WHERE id = $1',
         [req.userId]
       );
-      const users = rows as any[];
 
       if (users.length === 0) {
         res.status(404).json({ success: false, message: 'Usuário não encontrado' });
@@ -112,7 +110,7 @@ export const authController = {
     const { nome } = req.body;
 
     try {
-      await pool.query('UPDATE usuarios SET nome = ? WHERE id = ?', [nome, req.userId]);
+      await pool.query('UPDATE usuarios SET nome = $1 WHERE id = $2', [nome, req.userId]);
       res.json({ success: true, message: 'Perfil atualizado com sucesso' });
     } catch (error) {
       console.error('Update profile error:', error);

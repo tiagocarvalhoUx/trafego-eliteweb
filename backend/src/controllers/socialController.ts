@@ -10,9 +10,9 @@ export const socialController = {
   // GET /api/social/accounts
   async getAccounts(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const [rows] = await pool.query(
+      const { rows } = await pool.query(
         `SELECT id, plataforma, conta_nome, conta_id_plataforma, data_conexao, ativo
-         FROM contas_sociais WHERE usuario_id = ?`,
+         FROM contas_sociais WHERE usuario_id = $1`,
         [req.userId]
       );
       res.json({ success: true, data: rows });
@@ -67,20 +67,20 @@ export const socialController = {
 
       await pool.query(
         `INSERT INTO contas_sociais (usuario_id, plataforma, access_token, token_expires_at, conta_nome, conta_id_plataforma)
-         VALUES (?, 'instagram', ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           access_token = VALUES(access_token),
-           token_expires_at = VALUES(token_expires_at),
+         VALUES ($1, 'instagram', $2, $3, $4, $5)
+         ON CONFLICT (usuario_id, conta_id_plataforma) DO UPDATE SET
+           access_token = EXCLUDED.access_token,
+           token_expires_at = EXCLUDED.token_expires_at,
            ativo = true`,
         [userId, tokenData.access_token, expiresAt, profile.username, profile.id]
       );
 
       // Trigger initial data collection
-      const [contaRows] = await pool.query(
-        'SELECT id FROM contas_sociais WHERE usuario_id = ? AND conta_id_plataforma = ?',
+      const contaResult = await pool.query(
+        'SELECT id FROM contas_sociais WHERE usuario_id = $1 AND conta_id_plataforma = $2',
         [userId, profile.id]
       );
-      const contaId = (contaRows as any[])[0]?.id;
+      const contaId = contaResult.rows[0]?.id;
 
       if (contaId) {
         analyticsService.collectInstagramData(contaId, tokenData.access_token).catch(console.error);
@@ -127,11 +127,11 @@ export const socialController = {
 
       await pool.query(
         `INSERT INTO contas_sociais (usuario_id, plataforma, access_token, refresh_token, token_expires_at, conta_nome, conta_id_plataforma)
-         VALUES (?, 'tiktok', ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           access_token = VALUES(access_token),
-           refresh_token = VALUES(refresh_token),
-           token_expires_at = VALUES(token_expires_at),
+         VALUES ($1, 'tiktok', $2, $3, $4, $5, $6)
+         ON CONFLICT (usuario_id, conta_id_plataforma) DO UPDATE SET
+           access_token = EXCLUDED.access_token,
+           refresh_token = EXCLUDED.refresh_token,
+           token_expires_at = EXCLUDED.token_expires_at,
            ativo = true`,
         [req.userId, tokenData.access_token, tokenData.refresh_token, expiresAt, userInfo.display_name, userInfo.open_id]
       );
@@ -151,7 +151,7 @@ export const socialController = {
   async disconnectAccount(req: AuthRequest, res: Response): Promise<void> {
     try {
       await pool.query(
-        'UPDATE contas_sociais SET ativo = false WHERE id = ? AND usuario_id = ?',
+        'UPDATE contas_sociais SET ativo = false WHERE id = $1 AND usuario_id = $2',
         [req.params.id, req.userId]
       );
       res.json({ success: true, message: 'Conta desconectada com sucesso' });
@@ -164,11 +164,10 @@ export const socialController = {
   // POST /api/social/collect/:contaId
   async triggerCollection(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const [rows] = await pool.query(
-        'SELECT id, plataforma, access_token FROM contas_sociais WHERE id = ? AND usuario_id = ? AND ativo = true',
+      const { rows: contas } = await pool.query(
+        'SELECT id, plataforma, access_token FROM contas_sociais WHERE id = $1 AND usuario_id = $2 AND ativo = true',
         [req.params.contaId, req.userId]
       );
-      const contas = rows as any[];
 
       if (contas.length === 0) {
         res.status(404).json({ success: false, message: 'Conta não encontrada' });
