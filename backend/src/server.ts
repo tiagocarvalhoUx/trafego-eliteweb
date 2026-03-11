@@ -16,6 +16,9 @@ import automationRoutes from './routes/automation';
 
 const app = express();
 
+// Trust proxy (required for Render, Heroku, etc.)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 
