@@ -55,12 +55,12 @@ async function generateWithPixverse(prompt: string): Promise<string> {
     headers,
     body: JSON.stringify({
       prompt,
-      model: 'v4.5',
+      model: 'v3.5',
       quality: '540p',
       duration: 8,
       aspect_ratio: '9:16',
       motion_mode: 'normal',
-      water_mark: false,
+      water_mark: 0,
     }),
   });
 
