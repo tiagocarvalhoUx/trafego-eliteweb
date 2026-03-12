@@ -200,11 +200,8 @@ export const videoService = {
         [videoUrl, caption, jobId]
       );
 
-      // Step 5: Auto-publish to Instagram if connected (non-blocking)
-      const plataformas = data.plataformas?.toLowerCase() || '';
-      if (plataformas.includes('instagram')) {
-        autoPublishToInstagram(videoUrl, caption, usuarioId, jobId).catch(console.error);
-      }
+      // Step 5: Auto-publish to Instagram if user has a connected account
+      autoPublishToInstagram(videoUrl, caption, usuarioId, jobId).catch(console.error);
     } catch (error: any) {
       const msg = error?.message || 'Unknown error';
       console.error(`[startGeneration] Job ${jobId} failed:`, msg);
