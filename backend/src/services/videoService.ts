@@ -50,6 +50,7 @@ async function generateWithPixverse(prompt: string): Promise<string> {
     model: 'v3.5',
     quality: '540p',
     duration: 5,
+    aspect_ratio: '9:16',
   };
 
   console.log('[Pixverse] Sending request:', JSON.stringify(payload));
