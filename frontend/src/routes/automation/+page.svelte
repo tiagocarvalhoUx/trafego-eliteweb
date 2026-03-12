@@ -313,7 +313,7 @@
     <div class="flex items-center justify-between mb-4">
       <div>
         <h2 class="text-lg font-semibold text-white">Gerar Vídeo com IA</h2>
-        <p class="text-gray-500 text-xs mt-0.5">Powered by Google Veo 3</p>
+        <p class="text-gray-500 text-xs mt-0.5">Powered by Pixverse AI + ElevenLabs</p>
       </div>
       <div class="flex gap-2">
         <button on:click={handleRefreshJobs} class="btn-secondary text-sm">↻ Atualizar</button>
@@ -325,54 +325,50 @@
 
     {#if showVideoForm}
       <div class="card mb-4 border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
-        <h3 class="text-base font-semibold text-white mb-4">Nova Automação de Vídeo</h3>
-        <form on:submit|preventDefault={handleCreateVideo} class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="md:col-span-2">
-            <label class="block text-sm text-gray-300 mb-1.5">Tema do vídeo <span class="text-red-400">*</span></label>
-            <input
+        <h3 class="text-base font-semibold text-white mb-1">Gerar Vídeo com IA</h3>
+        <p class="text-xs text-gray-400 mb-4">Vídeo de 8s com narração em voz gerado automaticamente</p>
+        <form on:submit|preventDefault={handleCreateVideo} class="flex flex-col gap-4">
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">
+              Sobre o que é o vídeo? <span class="text-red-400">*</span>
+            </label>
+            <textarea
               bind:value={newVideo.tema}
-              class="input"
-              placeholder='Ex: "5 Dicas para Aumentar Engajamento no Instagram"'
+              class="input resize-none"
+              rows="3"
+              placeholder='Ex: "5 dicas para aumentar seguidores no Instagram usando Reels"'
               required
+            ></textarea>
+          </div>
+
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">Chamada para ação (CTA) <span class="text-gray-500 text-xs">— opcional</span></label>
+            <input
+              bind:value={newVideo.cta}
+              class="input"
+              placeholder='Ex: "Siga para mais dicas!", "Link na bio"'
             />
           </div>
 
           <div>
-            <label class="block text-sm text-gray-300 mb-1.5">Estilo Visual</label>
-            <input bind:value={newVideo.estilo} class="input" placeholder="Ex: Animado, Realista, Minimalista" />
+            <label class="block text-sm text-gray-300 mb-2">Plataforma</label>
+            <div class="flex flex-wrap gap-2">
+              {#each ['Instagram Reels', 'TikTok', 'YouTube Shorts', 'Facebook'] as p}
+                <button
+                  type="button"
+                  on:click={() => { newVideo.plataformas = newVideo.plataformas === p ? '' : p; }}
+                  class="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors
+                    {newVideo.plataformas === p
+                      ? 'bg-purple-600 border-purple-500 text-white'
+                      : 'bg-white/5 border-white/10 text-gray-400 hover:border-purple-500/50'}"
+                >
+                  {p}
+                </button>
+              {/each}
+            </div>
           </div>
 
-          <div>
-            <label class="block text-sm text-gray-300 mb-1.5">Tom</label>
-            <input bind:value={newVideo.tom} class="input" placeholder="Ex: Inspirador, Informativo, Promocional" />
-          </div>
-
-          <div>
-            <label class="block text-sm text-gray-300 mb-1.5">Público-alvo</label>
-            <input bind:value={newVideo.publico} class="input" placeholder="Ex: Empreendedores, Jovens de 18-25 anos" />
-          </div>
-
-          <div>
-            <label class="block text-sm text-gray-300 mb-1.5">Música de Fundo</label>
-            <input bind:value={newVideo.musica} class="input" placeholder="Ex: Otimista e motivacional, Energética" />
-          </div>
-
-          <div class="md:col-span-2">
-            <label class="block text-sm text-gray-300 mb-1.5">Elementos Chave</label>
-            <input bind:value={newVideo.elementos} class="input" placeholder="Ex: Ícones de redes sociais, gráficos de crescimento, pessoa sorrindo" />
-          </div>
-
-          <div>
-            <label class="block text-sm text-gray-300 mb-1.5">Chamada para Ação (CTA)</label>
-            <input bind:value={newVideo.cta} class="input" placeholder='Ex: "Siga para mais dicas!", "Link na bio"' />
-          </div>
-
-          <div>
-            <label class="block text-sm text-gray-300 mb-1.5">Plataformas</label>
-            <input bind:value={newVideo.plataformas} class="input" placeholder="Instagram Reels, TikTok" />
-          </div>
-
-          <div class="md:col-span-2 flex gap-3">
+          <div class="flex gap-3 pt-1">
             <button type="submit" disabled={generatingVideo} class="btn-primary">
               {generatingVideo ? 'Iniciando...' : '✨ Gerar Vídeo'}
             </button>
