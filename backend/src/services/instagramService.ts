@@ -1,7 +1,7 @@
 /**
  * Instagram Graph API Service
- * Handles all communication with Instagram Graph API
- * Docs: https://developers.facebook.com/docs/instagram-api
+ * Uses Instagram Login API (not Facebook Login)
+ * Docs: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login
  */
 import axios from 'axios';
 
@@ -100,8 +100,6 @@ export const instagramService = {
   },
 
   // Send a direct message via Instagram Messaging API
-  // igUserId = the business account's Instagram User ID
-  // recipientIgUserId = the recipient's Instagram User ID (from comment.from.id)
   async sendDirectMessage(igUserId: string, recipientIgUserId: string, message: string, accessToken: string): Promise<void> {
     await axios.post(`${IG_GRAPH_URL}/${igUserId}/messages`, {
       recipient: { id: recipientIgUserId },
@@ -127,11 +125,10 @@ export const instagramService = {
   },
 
   // Exchange short-lived token for long-lived token
-  async exchangeToken(shortLivedToken: string, appId: string, appSecret: string): Promise<{ access_token: string; expires_in: number }> {
+  async exchangeToken(shortLivedToken: string, appSecret: string): Promise<{ access_token: string; expires_in: number }> {
     const { data } = await axios.get('https://graph.instagram.com/access_token', {
       params: {
         grant_type: 'ig_exchange_token',
-        client_id: appId,
         client_secret: appSecret,
         access_token: shortLivedToken,
       },
@@ -143,7 +140,9 @@ export const instagramService = {
   getAuthUrl(appId: string, redirectUri: string, state?: string): string {
     const scopes = [
       'instagram_business_basic',
-      'instagram_manage_comments',
+      'instagram_business_manage_comments',
+      'instagram_business_manage_messages',
+      'instagram_business_content_publish',
     ].join(',');
 
     const stateParam = state ? `&state=${encodeURIComponent(state)}` : '';

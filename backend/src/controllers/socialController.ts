@@ -45,21 +45,24 @@ export const socialController = {
         return;
       }
 
-      // Exchange code for short-lived token, then for long-lived token
       const cleanCode = (code as string).split('#')[0];
       console.log('Instagram callback - code:', cleanCode, 'redirect_uri:', env.instagram.redirectUri);
+
+      // Step 1: Exchange code for short-lived token (Instagram Login API)
       const shortToken = await instagramService.exchangeCode(
         cleanCode,
         env.instagram.appId,
         env.instagram.appSecret,
         env.instagram.redirectUri
       );
+
+      // Step 2: Exchange for long-lived token
       const tokenData = await instagramService.exchangeToken(
         shortToken.access_token,
-        env.instagram.appId,
         env.instagram.appSecret
       );
 
+      // Step 3: Get Instagram profile
       const profile = await instagramService.getProfile(tokenData.access_token);
 
       // Save account to database
