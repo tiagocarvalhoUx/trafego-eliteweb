@@ -230,4 +230,39 @@ export const videoService = {
   async deleteJob(jobId: number, usuarioId: number): Promise<void> {
     await pool.query(`DELETE FROM video_jobs WHERE id=$1 AND usuario_id=$2`, [jobId, usuarioId]);
   },
+
+  async uploadAndSave(fileBuffer: Buffer, caption: string, usuarioId: number): Promise<number> {
+    const videoUrl = await uploadToSupabase(fileBuffer, usuarioId);
+    const safeCaption = caption.slice(0, 2200);
+
+    const { rows } = await pool.query(
+      `INSERT INTO video_jobs (usuario_id, prompt_tema, status, video_url, caption)
+       VALUES ($1, 'Upload manual', 'done', $2, $3)
+       RETURNING id`,
+      [usuarioId, videoUrl, safeCaption]
+    );
+    return rows[0].id;
+  },
+
+  async publishToInstagram(jobId: number, usuarioId: number, caption: string): Promise<void> {
+    const job = await this.getJob(jobId, usuarioId);
+    if (!job || !job.video_url) throw new Error('Vídeo não encontrado');
+
+    const { rows } = await pool.query(
+      `SELECT access_token, conta_id_plataforma FROM contas_sociais
+       WHERE usuario_id = $1 AND plataforma = 'instagram' AND ativo = true LIMIT 1`,
+      [usuarioId]
+    );
+    if (rows.length === 0) throw new Error('Nenhuma conta Instagram conectada');
+
+    const { access_token, conta_id_plataforma } = rows[0];
+    const safeCaption = caption.slice(0, 2200);
+
+    await instagramService.publishReel(conta_id_plataforma, job.video_url, safeCaption, access_token);
+
+    await pool.query(
+      `UPDATE video_jobs SET publicado_instagram = true, caption = $1, updated_at = NOW() WHERE id = $2`,
+      [safeCaption, jobId]
+    );
+  },
 };

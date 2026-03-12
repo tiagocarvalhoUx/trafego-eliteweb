@@ -1,6 +1,9 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { videoService } from '../services/videoService';
+import multer from 'multer';
+
+export const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 export const videoController = {
   async listJobs(req: AuthRequest, res: Response): Promise<void> {
@@ -61,6 +64,33 @@ export const videoController = {
     } catch (error) {
       console.error('Delete video job error:', error);
       res.status(500).json({ success: false, message: 'Erro ao remover vídeo' });
+    }
+  },
+
+  async uploadVideo(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.file) {
+        res.status(400).json({ success: false, message: 'Nenhum vídeo enviado' });
+        return;
+      }
+      const caption = (req.body.caption as string) || '';
+      const jobId = await videoService.uploadAndSave(req.file.buffer, caption, req.userId!);
+      res.status(201).json({ success: true, message: 'Vídeo enviado com sucesso!', data: { jobId } });
+    } catch (error: any) {
+      console.error('Upload video error:', error);
+      res.status(500).json({ success: false, message: error?.message || 'Erro ao enviar vídeo' });
+    }
+  },
+
+  async publishToInstagram(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const jobId = parseInt(req.params.id);
+      const caption = (req.body.caption as string) || '';
+      await videoService.publishToInstagram(jobId, req.userId!, caption);
+      res.json({ success: true, message: 'Publicado no Instagram com sucesso!' });
+    } catch (error: any) {
+      console.error('Publish to Instagram error:', error?.response?.data || error);
+      res.status(500).json({ success: false, message: error?.message || 'Erro ao publicar no Instagram' });
     }
   },
 };

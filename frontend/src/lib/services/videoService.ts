@@ -30,4 +30,19 @@ export const videoService = {
   async deleteJob(id: number): Promise<void> {
     await api.delete(`/video/${id}`);
   },
+
+  async uploadVideo(file: File, caption: string): Promise<{ jobId: number }> {
+    const formData = new FormData();
+    formData.append('video', file);
+    formData.append('caption', caption);
+    const { data } = await api.post('/video/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    });
+    return data.data;
+  },
+
+  async publishToInstagram(id: number, caption: string): Promise<void> {
+    await api.post(`/video/${id}/publish/instagram`, { caption });
+  },
 };

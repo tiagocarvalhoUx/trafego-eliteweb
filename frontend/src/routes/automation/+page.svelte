@@ -15,8 +15,20 @@
   let showCreateForm = false;
   let showGoalForm = false;
   let showVideoForm = false;
+  let showUploadForm = false;
   let runningCycle = false;
   let generatingVideo = false;
+  let uploadingVideo = false;
+  let publishingId: number | null = null;
+
+  let uploadData = {
+    file: null as File | null,
+    caption: '',
+    preview: '',
+  };
+
+  let publishCaption = '';
+  let publishJobId: number | null = null;
 
   let newVideo = {
     tema: '',
@@ -120,6 +132,56 @@
       toast.success('Vídeo removido');
     } catch {
       toast.error('Erro ao remover vídeo');
+    }
+  }
+
+  function handleFileSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    uploadData.file = file;
+    if (uploadData.preview) URL.revokeObjectURL(uploadData.preview);
+    uploadData.preview = URL.createObjectURL(file);
+  }
+
+  async function handleUploadVideo() {
+    if (!uploadData.file) {
+      toast.error('Selecione um vídeo');
+      return;
+    }
+    uploadingVideo = true;
+    try {
+      await videoService.uploadVideo(uploadData.file, uploadData.caption);
+      videoJobs = await videoService.listJobs();
+      showUploadForm = false;
+      if (uploadData.preview) URL.revokeObjectURL(uploadData.preview);
+      uploadData = { file: null, caption: '', preview: '' };
+      toast.success('Vídeo enviado com sucesso!');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? 'Erro ao enviar vídeo');
+    } finally {
+      uploadingVideo = false;
+    }
+  }
+
+  function openPublishModal(job: any) {
+    publishJobId = job.id;
+    publishCaption = job.caption || '';
+  }
+
+  async function handlePublishInstagram() {
+    if (!publishJobId) return;
+    publishingId = publishJobId;
+    try {
+      await videoService.publishToInstagram(publishJobId, publishCaption);
+      videoJobs = await videoService.listJobs();
+      publishJobId = null;
+      publishCaption = '';
+      toast.success('Publicado no Instagram com sucesso!');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? 'Erro ao publicar');
+    } finally {
+      publishingId = null;
     }
   }
 
@@ -412,11 +474,22 @@
                 {/if}
               </div>
 
-              <div class="flex gap-2 shrink-0">
+              <div class="flex gap-2 shrink-0 flex-wrap">
                 {#if job.status === 'done' && job.video_url}
                   <a href={job.video_url} target="_blank" rel="noopener" class="btn-secondary text-xs py-1.5 px-3">
                     ↗ Abrir
                   </a>
+                  {#if !job.publicado_instagram}
+                    <button
+                      on:click={() => openPublishModal(job)}
+                      disabled={publishingId === job.id}
+                      class="text-xs px-3 py-1.5 rounded-lg border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors"
+                    >
+                      {publishingId === job.id ? 'Publicando...' : 'Publicar no Instagram'}
+                    </button>
+                  {:else}
+                    <span class="text-xs px-3 py-1.5 text-green-400">Publicado</span>
+                  {/if}
                 {/if}
                 <button
                   on:click={() => handleDeleteVideo(job.id)}
@@ -458,6 +531,93 @@
       </div>
     {/if}
   </div>
+
+  <!-- Upload Video Section -->
+  <div class="mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-lg font-semibold text-white">Upload de Video</h2>
+        <p class="text-gray-500 text-xs mt-0.5">Envie seu video e publique no Instagram ou TikTok</p>
+      </div>
+      <button on:click={() => (showUploadForm = !showUploadForm)} class="btn-primary text-sm">
+        + Upload de Video
+      </button>
+    </div>
+
+    {#if showUploadForm}
+      <div class="card mb-4 border-blue-500/30 bg-gradient-to-br from-blue-500/5 to-cyan-500/5">
+        <h3 class="text-base font-semibold text-white mb-4">Enviar Video</h3>
+        <form on:submit|preventDefault={handleUploadVideo} class="flex flex-col gap-4">
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">
+              Video <span class="text-red-400">*</span>
+            </label>
+            <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/10 rounded-xl cursor-pointer hover:border-blue-500/50 transition-colors {uploadData.file ? 'border-blue-500/30 bg-blue-500/5' : ''}">
+              {#if uploadData.file}
+                <p class="text-blue-300 text-sm font-medium">{uploadData.file.name}</p>
+                <p class="text-gray-500 text-xs mt-1">{(uploadData.file.size / 1024 / 1024).toFixed(1)} MB</p>
+              {:else}
+                <p class="text-gray-400 text-sm">Clique para selecionar ou arraste o video</p>
+                <p class="text-gray-600 text-xs mt-1">MP4, MOV (max 100MB)</p>
+              {/if}
+              <input type="file" accept="video/mp4,video/quicktime,video/*" class="hidden" on:change={handleFileSelect} />
+            </label>
+          </div>
+
+          {#if uploadData.preview}
+            <video src={uploadData.preview} controls class="w-full max-h-64 rounded-xl bg-black object-contain" preload="metadata">
+              <track kind="captions" />
+            </video>
+          {/if}
+
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">
+              Texto do post (caption)
+            </label>
+            <textarea
+              bind:value={uploadData.caption}
+              class="input resize-none"
+              rows="3"
+              placeholder="Escreva o texto que vai aparecer no post... Inclua hashtags!"
+            ></textarea>
+            <p class="text-gray-600 text-xs mt-1">{uploadData.caption.length}/2200 caracteres</p>
+          </div>
+
+          <div class="flex gap-3 pt-1">
+            <button type="submit" disabled={uploadingVideo || !uploadData.file} class="btn-primary">
+              {uploadingVideo ? 'Enviando...' : 'Enviar Video'}
+            </button>
+            <button type="button" on:click={() => { showUploadForm = false; if (uploadData.preview) URL.revokeObjectURL(uploadData.preview); uploadData = { file: null, caption: '', preview: '' }; }} class="btn-secondary">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    {/if}
+  </div>
+
+  <!-- Publish Modal -->
+  {#if publishJobId}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" on:click|self={() => { publishJobId = null; }} on:keydown={(e) => { if (e.key === 'Escape') publishJobId = null; }}>
+      <div class="card w-full max-w-lg mx-4 border-purple-500/30">
+        <h3 class="text-base font-semibold text-white mb-4">Publicar no Instagram</h3>
+        <div>
+          <label class="block text-sm text-gray-300 mb-1.5">Texto do post</label>
+          <textarea
+            bind:value={publishCaption}
+            class="input resize-none"
+            rows="4"
+            placeholder="Escreva o texto do post com hashtags..."
+          ></textarea>
+          <p class="text-gray-600 text-xs mt-1">{publishCaption.length}/2200 caracteres</p>
+        </div>
+        <div class="flex gap-3 mt-4">
+          <button on:click={handlePublishInstagram} disabled={publishingId !== null} class="btn-primary">
+            {publishingId ? 'Publicando...' : 'Publicar no Instagram'}
+          </button>
+          <button on:click={() => { publishJobId = null; }} class="btn-secondary">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <!-- Goals Section -->
   <div>
