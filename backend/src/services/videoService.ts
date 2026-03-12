@@ -102,26 +102,24 @@ async function generateWithPixverse(prompt: string): Promise<string> {
   throw new Error('Pixverse: timeout waiting for video generation');
 }
 
-async function generateVoiceWithElevenLabs(text: string): Promise<Buffer> {
-  const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${env.elevenlabs.voiceId}`,
-    {
-      method: 'POST',
-      headers: {
-        'xi-api-key': env.elevenlabs.apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      }),
-    }
-  );
+async function generateVoiceWithOpenAI(text: string): Promise<Buffer> {
+  const res = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.openai.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'tts-1',
+      input: text,
+      voice: env.openai.ttsVoice,
+      response_format: 'mp3',
+    }),
+  });
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`ElevenLabs TTS error ${res.status}: ${err}`);
+    throw new Error(`OpenAI TTS error ${res.status}: ${err}`);
   }
 
   return Buffer.from(await res.arrayBuffer());
@@ -200,8 +198,8 @@ export const videoService = {
       // Step 1: Generate video (Pixverse) and voice (ElevenLabs) in parallel
       const [pixverseUrl, audioBuffer] = await Promise.all([
         generateWithPixverse(videoPrompt),
-        env.elevenlabs.apiKey
-          ? generateVoiceWithElevenLabs(narrationText)
+        env.openai.apiKey
+          ? generateVoiceWithOpenAI(narrationText)
           : Promise.resolve(null as any),
       ]);
 

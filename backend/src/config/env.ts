@@ -38,9 +38,9 @@ export const env = {
     apiKey: process.env.PIXVERSE_API_KEY || '',
   },
 
-  elevenlabs: {
-    apiKey: process.env.ELEVENLABS_API_KEY || '',
-    voiceId: process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB', // Adam (multilingual)
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || '',
+    ttsVoice: process.env.OPENAI_TTS_VOICE || 'nova', // nova, alloy, echo, fable, onyx, shimmer
   },
 
   supabase: {
