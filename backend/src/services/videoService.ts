@@ -274,12 +274,16 @@ export const videoService = {
     await pool.query(`UPDATE video_jobs SET status='processing', updated_at=NOW() WHERE id=$1`, [jobId]);
 
     try {
-      // Step 1: Generate video (Pixverse) and voice (ElevenLabs) in parallel
+      // Step 1: Generate video (Pixverse) and voice (OpenAI TTS) in parallel
+      // TTS failure is non-fatal — video continues without voice
       const [pixverseUrl, audioBuffer] = await Promise.all([
         generateWithPixverse(videoPrompt),
         env.openai.apiKey
-          ? generateVoiceWithOpenAI(narrationText)
-          : Promise.resolve(null as any),
+          ? generateVoiceWithOpenAI(narrationText).catch((err) => {
+              console.error(`[TTS] Voice generation failed (non-fatal): ${err.message}`);
+              return null;
+            })
+          : Promise.resolve(null),
       ]);
 
       let finalVideoBuffer: Buffer;
