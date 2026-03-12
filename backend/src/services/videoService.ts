@@ -19,14 +19,18 @@ export interface VideoPromptData {
 }
 
 function buildVideoPrompt(data: VideoPromptData): string {
-  const parts = [`Short social media video about: "${data.tema}".`];
-  if (data.estilo) parts.push(`Visual style: ${data.estilo}.`);
-  if (data.tom) parts.push(`Tone: ${data.tom}.`);
-  if (data.publico) parts.push(`Target audience: ${data.publico}.`);
-  if (data.elementos) parts.push(`Key elements: ${data.elementos}.`);
-  if (data.cta) parts.push(`Call to action: ${data.cta}.`);
-  parts.push('Vertical format 9:16, high quality, engaging.');
-  return parts.join(' ');
+  // Take only the first ~200 chars of tema to keep prompt short
+  const tema = data.tema.slice(0, 200);
+  const parts = [`Short social media video about: "${tema}".`];
+  if (data.estilo) parts.push(`Visual style: ${data.estilo.slice(0, 50)}.`);
+  if (data.tom) parts.push(`Tone: ${data.tom.slice(0, 50)}.`);
+  if (data.cta) parts.push(`Call to action: ${data.cta.slice(0, 50)}.`);
+  parts.push('Vertical format, high quality, engaging, professional.');
+
+  // Remove emojis and special unicode chars, limit to 500 chars
+  return parts.join(' ')
+    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '')
+    .slice(0, 500);
 }
 
 function buildCaption(data: VideoPromptData): string {
