@@ -1,18 +1,11 @@
 /**
  * Video Generation Service
- * Pipeline: Pixverse (8s video) + OpenAI TTS (voice) + ffmpeg (merge) + Supabase Storage + Instagram Reel publish
+ * Pipeline: Pixverse (8s video) + Supabase Storage + Instagram Reel auto-publish
  */
 import { createClient } from '@supabase/supabase-js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { writeFile, unlink, readFile } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
 import pool from '../config/database';
 import { env } from '../config/env';
 import { instagramService } from './instagramService';
-
-const execAsync = promisify(exec);
 
 export interface VideoPromptData {
   tema: string;
@@ -36,30 +29,39 @@ function buildVideoPrompt(data: VideoPromptData): string {
   return parts.join(' ');
 }
 
-function buildNarration(data: VideoPromptData): string {
-  const parts: string[] = [];
-  if (data.tema) parts.push(data.tema);
-  if (data.cta) parts.push(data.cta);
-  return parts.join('. ') || data.tema;
+function buildCaption(data: VideoPromptData): string {
+  const lines: string[] = [];
+  if (data.tema) lines.push(data.tema);
+  if (data.cta) lines.push(data.cta);
+
+  const hashtags = [
+    '#reels', '#viral', '#trending', '#socialmedia', '#marketing',
+    '#digitalmarketing', '#empreendedorismo', '#negociosdigitais',
+    '#conteudo', '#dicas', '#motivacao', '#sucesso', '#brasil',
+    '#marketingdigital', '#crescimento',
+  ].join(' ');
+
+  return `${lines.join('\n\n')}\n\n${hashtags}`;
 }
 
 async function generateWithPixverse(prompt: string): Promise<string> {
-  const headers = {
-    'API-KEY': env.pixverse.apiKey,
-    'Content-Type': 'application/json',
-    'Ai-trace-id': crypto.randomUUID(),
+  const payload = {
+    prompt,
+    model: 'v3.5',
+    quality: '540p',
+    duration: 5,
   };
+
+  console.log('[Pixverse] Sending request:', JSON.stringify(payload));
 
   const createRes = await fetch('https://app-api.pixverse.ai/openapi/v2/video/text/generate', {
     method: 'POST',
-    headers,
-    body: JSON.stringify({
-      prompt,
-      model: 'v3.5',
-      quality: '540p',
-      duration: 8,
-      motion_mode: 'normal',
-    }),
+    headers: {
+      'API-KEY': env.pixverse.apiKey,
+      'Content-Type': 'application/json',
+      'Ai-trace-id': crypto.randomUUID(),
+    },
+    body: JSON.stringify(payload),
   });
 
   if (!createRes.ok) {
@@ -77,6 +79,8 @@ async function generateWithPixverse(prompt: string): Promise<string> {
     throw new Error(`Pixverse: no video_id returned. Response: ${JSON.stringify(createData)}`);
   }
 
+  console.log(`[Pixverse] Video ID: ${videoId}, polling status...`);
+
   // Poll status — 1=success, 5=waiting, 7=moderation fail, 8=failed
   for (let attempt = 0; attempt < 120; attempt++) {
     await new Promise((r) => setTimeout(r, 5000));
@@ -93,7 +97,10 @@ async function generateWithPixverse(prompt: string): Promise<string> {
     const resp = statusData.Resp;
     const status = resp?.status;
 
-    if (status === 1 && resp?.url) return resp.url;
+    if (status === 1 && resp?.url) {
+      console.log(`[Pixverse] Video ready: ${resp.url}`);
+      return resp.url;
+    }
     if (status === 7) throw new Error('Pixverse: content moderation failure');
     if (status === 8) throw new Error('Pixverse: generation failed');
   }
@@ -101,110 +108,25 @@ async function generateWithPixverse(prompt: string): Promise<string> {
   throw new Error('Pixverse: timeout waiting for video generation');
 }
 
-async function generateVoiceWithOpenAI(text: string): Promise<Buffer> {
-  const res = await fetch('https://api.openai.com/v1/audio/speech', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.openai.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'tts-1',
-      input: text,
-      voice: env.openai.ttsVoice,
-      response_format: 'mp3',
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI TTS error ${res.status}: ${err}`);
+async function uploadToSupabase(data: Buffer, userId: number): Promise<string> {
+  if (!env.supabase.url || !env.supabase.serviceRoleKey) {
+    throw new Error('Supabase not configured');
   }
 
-  return Buffer.from(await res.arrayBuffer());
-}
+  const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
+  const filename = `${userId}/${Date.now()}.mp4`;
 
-async function mergeVideoAndAudio(videoUrl: string, audioBuffer: Buffer): Promise<Buffer> {
-  const id = crypto.randomUUID();
-  const videoPath = join(tmpdir(), `${id}_video.mp4`);
-  const audioPath = join(tmpdir(), `${id}_audio.mp3`);
-  const outputPath = join(tmpdir(), `${id}_output.mp4`);
+  const { error } = await supabase.storage
+    .from('videos')
+    .upload(filename, data, { contentType: 'video/mp4', upsert: false });
 
-  try {
-    // Download video
-    const videoRes = await fetch(videoUrl);
-    if (!videoRes.ok) throw new Error(`Failed to download video: ${videoRes.status}`);
-    const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
+  if (error) throw new Error(`Supabase upload error: ${error.message}`);
 
-    // Write temp files
-    await writeFile(videoPath, videoBuffer);
-    await writeFile(audioPath, audioBuffer);
-
-    // Merge with ffmpeg: loop/trim audio to fit video duration
-    await execAsync(
-      `ffmpeg -y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -shortest "${outputPath}"`
-    );
-
-    const result = await readFile(outputPath);
-    return result;
-  } finally {
-    // Cleanup temp files
-    await unlink(videoPath).catch(() => {});
-    await unlink(audioPath).catch(() => {});
-    await unlink(outputPath).catch(() => {});
-  }
-}
-
-async function generateCaption(data: VideoPromptData): Promise<string> {
-  if (!env.openai.apiKey) {
-    // Fallback caption without AI
-    const hashtags = '#reels #viral #trending #socialmedia #marketing';
-    return `${data.tema}${data.cta ? '\n\n' + data.cta : ''}\n\n${hashtags}`;
-  }
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.openai.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `Você é um especialista em social media marketing. Crie legendas para posts de Instagram Reels em português brasileiro.
-A legenda deve ser:
-- Curta e envolvente (máximo 3-4 linhas)
-- Ter um tom profissional mas acessível
-- Incluir emojis relevantes
-- Terminar com 15-20 hashtags relevantes e populares
-- Se houver um CTA, incluí-lo naturalmente no texto
-Responda APENAS com a legenda pronta, sem explicações.`,
-        },
-        {
-          role: 'user',
-          content: `Tema do vídeo: ${data.tema}${data.cta ? `\nCall to action: ${data.cta}` : ''}${data.plataformas ? `\nPlataformas: ${data.plataformas}` : ''}`,
-        },
-      ],
-      max_tokens: 500,
-      temperature: 0.8,
-    }),
-  });
-
-  if (!res.ok) {
-    console.error(`OpenAI caption error ${res.status}: ${await res.text()}`);
-    // Fallback
-    const hashtags = '#reels #viral #trending #socialmedia #marketing';
-    return `${data.tema}${data.cta ? '\n\n' + data.cta : ''}\n\n${hashtags}`;
-  }
-
-  const result = await res.json() as any;
-  return result.choices?.[0]?.message?.content?.trim() || data.tema;
+  const { data: urlData } = supabase.storage.from('videos').getPublicUrl(filename);
+  return urlData.publicUrl;
 }
 
 async function autoPublishToInstagram(videoUrl: string, caption: string, usuarioId: number, jobId: number): Promise<void> {
-  // Find user's active Instagram account
   const { rows } = await pool.query(
     `SELECT access_token, conta_id_plataforma FROM contas_sociais
      WHERE usuario_id = $1 AND plataforma = 'instagram' AND ativo = true
@@ -229,26 +151,8 @@ async function autoPublishToInstagram(videoUrl: string, caption: string, usuario
     );
     console.log(`[autoPublish] Reel published successfully for job ${jobId}`);
   } catch (error: any) {
-    console.error(`[autoPublish] Failed to publish Reel for job ${jobId}:`, error?.message || error);
+    console.error(`[autoPublish] Failed to publish Reel for job ${jobId}:`, error?.response?.data || error?.message || error);
   }
-}
-
-async function uploadToSupabase(data: Buffer, userId: number): Promise<string> {
-  if (!env.supabase.url || !env.supabase.serviceRoleKey) {
-    throw new Error('Supabase not configured');
-  }
-
-  const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
-  const filename = `${userId}/${Date.now()}.mp4`;
-
-  const { error } = await supabase.storage
-    .from('videos')
-    .upload(filename, data, { contentType: 'video/mp4', upsert: false });
-
-  if (error) throw new Error(`Supabase upload error: ${error.message}`);
-
-  const { data: urlData } = supabase.storage.from('videos').getPublicUrl(filename);
-  return urlData.publicUrl;
 }
 
 export const videoService = {
@@ -267,40 +171,24 @@ export const videoService = {
 
   async startGeneration(jobId: number, data: VideoPromptData, usuarioId: number): Promise<void> {
     const videoPrompt = buildVideoPrompt(data);
-    const narrationText = buildNarration(data);
 
     await pool.query(`UPDATE video_jobs SET status='processing', updated_at=NOW() WHERE id=$1`, [jobId]);
 
     try {
-      // Step 1: Generate video (Pixverse) and voice (OpenAI TTS) in parallel
-      // TTS failure is non-fatal — video continues without voice
-      const [pixverseUrl, audioBuffer] = await Promise.all([
-        generateWithPixverse(videoPrompt),
-        env.openai.apiKey
-          ? generateVoiceWithOpenAI(narrationText).catch((err) => {
-              console.error(`[TTS] Voice generation failed (non-fatal): ${err.message}`);
-              return null;
-            })
-          : Promise.resolve(null),
-      ]);
+      // Step 1: Generate video with Pixverse
+      const pixverseUrl = await generateWithPixverse(videoPrompt);
 
-      let finalVideoBuffer: Buffer;
+      // Step 2: Download video
+      const res = await fetch(pixverseUrl);
+      if (!res.ok) throw new Error(`Failed to download video: ${res.status}`);
+      const finalVideoBuffer = Buffer.from(await res.arrayBuffer());
 
-      if (audioBuffer) {
-        // Step 2: Merge video + audio with ffmpeg
-        finalVideoBuffer = await mergeVideoAndAudio(pixverseUrl, audioBuffer);
-      } else {
-        // No ElevenLabs key — download video as-is
-        const res = await fetch(pixverseUrl);
-        finalVideoBuffer = Buffer.from(await res.arrayBuffer());
-      }
-
-      // Step 3: Upload merged video to Supabase Storage
+      // Step 3: Upload to Supabase Storage
       const videoUrl = await uploadToSupabase(finalVideoBuffer, usuarioId);
 
-      // Step 4: Generate caption with hashtags using OpenAI
-      const caption = await generateCaption(data);
-      console.log(`[startGeneration] Caption generated for job ${jobId}`);
+      // Step 4: Generate caption with hashtags
+      const caption = buildCaption(data);
+      console.log(`[startGeneration] Job ${jobId} done. Video: ${videoUrl}`);
 
       await pool.query(
         `UPDATE video_jobs SET status='done', video_url=$1, caption=$2, updated_at=NOW() WHERE id=$3`,
@@ -314,6 +202,7 @@ export const videoService = {
       }
     } catch (error: any) {
       const msg = error?.message || 'Unknown error';
+      console.error(`[startGeneration] Job ${jobId} failed:`, msg);
       await pool.query(
         `UPDATE video_jobs SET status='failed', error_msg=$1, updated_at=NOW() WHERE id=$2`,
         [msg, jobId]
