@@ -1,6 +1,6 @@
 /**
  * Video Generation Service
- * Pipeline: Pixverse (8s video) + ElevenLabs (TTS voice) + ffmpeg (merge) + Supabase Storage
+ * Pipeline: Pixverse (8s video) + OpenAI TTS (voice) + ffmpeg (merge) + Supabase Storage + Instagram Reel publish
  */
 import { createClient } from '@supabase/supabase-js';
 import { exec } from 'child_process';
@@ -10,6 +10,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import pool from '../config/database';
 import { env } from '../config/env';
+import { instagramService } from './instagramService';
 
 const execAsync = promisify(exec);
 
@@ -156,6 +157,84 @@ async function mergeVideoAndAudio(videoUrl: string, audioBuffer: Buffer): Promis
   }
 }
 
+async function generateCaption(data: VideoPromptData): Promise<string> {
+  if (!env.openai.apiKey) {
+    // Fallback caption without AI
+    const hashtags = '#reels #viral #trending #socialmedia #marketing';
+    return `${data.tema}${data.cta ? '\n\n' + data.cta : ''}\n\n${hashtags}`;
+  }
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.openai.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `Você é um especialista em social media marketing. Crie legendas para posts de Instagram Reels em português brasileiro.
+A legenda deve ser:
+- Curta e envolvente (máximo 3-4 linhas)
+- Ter um tom profissional mas acessível
+- Incluir emojis relevantes
+- Terminar com 15-20 hashtags relevantes e populares
+- Se houver um CTA, incluí-lo naturalmente no texto
+Responda APENAS com a legenda pronta, sem explicações.`,
+        },
+        {
+          role: 'user',
+          content: `Tema do vídeo: ${data.tema}${data.cta ? `\nCall to action: ${data.cta}` : ''}${data.plataformas ? `\nPlataformas: ${data.plataformas}` : ''}`,
+        },
+      ],
+      max_tokens: 500,
+      temperature: 0.8,
+    }),
+  });
+
+  if (!res.ok) {
+    console.error(`OpenAI caption error ${res.status}: ${await res.text()}`);
+    // Fallback
+    const hashtags = '#reels #viral #trending #socialmedia #marketing';
+    return `${data.tema}${data.cta ? '\n\n' + data.cta : ''}\n\n${hashtags}`;
+  }
+
+  const result = await res.json() as any;
+  return result.choices?.[0]?.message?.content?.trim() || data.tema;
+}
+
+async function autoPublishToInstagram(videoUrl: string, caption: string, usuarioId: number, jobId: number): Promise<void> {
+  // Find user's active Instagram account
+  const { rows } = await pool.query(
+    `SELECT access_token, conta_id_plataforma FROM contas_sociais
+     WHERE usuario_id = $1 AND plataforma = 'instagram' AND ativo = true
+     LIMIT 1`,
+    [usuarioId]
+  );
+
+  if (rows.length === 0) {
+    console.log(`[autoPublish] No Instagram account connected for user ${usuarioId}`);
+    return;
+  }
+
+  const { access_token, conta_id_plataforma } = rows[0];
+
+  try {
+    console.log(`[autoPublish] Publishing Reel for job ${jobId} to Instagram...`);
+    await instagramService.publishReel(conta_id_plataforma, videoUrl, caption, access_token);
+
+    await pool.query(
+      `UPDATE video_jobs SET publicado_instagram = true, updated_at = NOW() WHERE id = $1`,
+      [jobId]
+    );
+    console.log(`[autoPublish] Reel published successfully for job ${jobId}`);
+  } catch (error: any) {
+    console.error(`[autoPublish] Failed to publish Reel for job ${jobId}:`, error?.message || error);
+  }
+}
+
 async function uploadToSupabase(data: Buffer, userId: number): Promise<string> {
   if (!env.supabase.url || !env.supabase.serviceRoleKey) {
     throw new Error('Supabase not configured');
@@ -217,10 +296,20 @@ export const videoService = {
       // Step 3: Upload merged video to Supabase Storage
       const videoUrl = await uploadToSupabase(finalVideoBuffer, usuarioId);
 
+      // Step 4: Generate caption with hashtags using OpenAI
+      const caption = await generateCaption(data);
+      console.log(`[startGeneration] Caption generated for job ${jobId}`);
+
       await pool.query(
-        `UPDATE video_jobs SET status='done', video_url=$1, updated_at=NOW() WHERE id=$2`,
-        [videoUrl, jobId]
+        `UPDATE video_jobs SET status='done', video_url=$1, caption=$2, updated_at=NOW() WHERE id=$3`,
+        [videoUrl, caption, jobId]
       );
+
+      // Step 5: Auto-publish to Instagram if connected (non-blocking)
+      const plataformas = data.plataformas?.toLowerCase() || '';
+      if (plataformas.includes('instagram')) {
+        autoPublishToInstagram(videoUrl, caption, usuarioId, jobId).catch(console.error);
+      }
     } catch (error: any) {
       const msg = error?.message || 'Unknown error';
       await pool.query(
@@ -233,7 +322,7 @@ export const videoService = {
   async getJobs(usuarioId: number): Promise<any[]> {
     const { rows } = await pool.query(
       `SELECT id, prompt_tema, prompt_estilo, prompt_tom, plataformas,
-              status, video_url, publicado_instagram, publicado_tiktok,
+              status, video_url, caption, publicado_instagram, publicado_tiktok,
               error_msg, created_at
        FROM video_jobs WHERE usuario_id=$1 ORDER BY created_at DESC`,
       [usuarioId]

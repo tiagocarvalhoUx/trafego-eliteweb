@@ -136,6 +136,58 @@ export const instagramService = {
     return data;
   },
 
+  // Publish a video as Instagram Reel
+  // Instagram Content Publishing API: create container → wait → publish
+  async publishReel(igUserId: string, videoUrl: string, caption: string, accessToken: string): Promise<{ id: string }> {
+    // Step 1: Create media container
+    const { data: container } = await axios.post(`${IG_GRAPH_URL}/${igUserId}/media`, null, {
+      params: {
+        media_type: 'REELS',
+        video_url: videoUrl,
+        caption,
+        access_token: accessToken,
+      },
+    });
+
+    const containerId = container.id;
+    if (!containerId) throw new Error('Instagram: failed to create media container');
+
+    console.log(`[publishReel] Container created: ${containerId}`);
+
+    // Step 2: Poll container status until ready (IN_PROGRESS → FINISHED)
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await new Promise((r) => setTimeout(r, 5000));
+
+      const { data: status } = await axios.get(`${IG_GRAPH_URL}/${containerId}`, {
+        params: {
+          fields: 'status_code,status',
+          access_token: accessToken,
+        },
+      });
+
+      console.log(`[publishReel] Container ${containerId} status: ${status.status_code}`);
+
+      if (status.status_code === 'FINISHED') {
+        // Step 3: Publish the container
+        const { data: published } = await axios.post(`${IG_GRAPH_URL}/${igUserId}/media_publish`, null, {
+          params: {
+            creation_id: containerId,
+            access_token: accessToken,
+          },
+        });
+
+        console.log(`[publishReel] Published! Media ID: ${published.id}`);
+        return { id: published.id };
+      }
+
+      if (status.status_code === 'ERROR') {
+        throw new Error(`Instagram publish error: ${status.status || 'Unknown error'}`);
+      }
+    }
+
+    throw new Error('Instagram: timeout waiting for video to be ready for publishing');
+  },
+
   // Get OAuth authorization URL (Instagram Login API)
   getAuthUrl(appId: string, redirectUri: string, state?: string): string {
     const scopes = [

@@ -173,6 +173,7 @@ async function migrate(): Promise<void> {
         plataformas TEXT,
         status VARCHAR(30) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'done', 'failed')),
         video_url TEXT,
+        caption TEXT,
         thumbnail_url TEXT,
         google_operation_id TEXT,
         publicado_instagram BOOLEAN DEFAULT FALSE,
@@ -183,6 +184,9 @@ async function migrate(): Promise<void> {
       );
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_video_jobs_usuario ON video_jobs(usuario_id);`);
+
+    // Add caption column if missing (migration for existing DBs)
+    await client.query(`ALTER TABLE video_jobs ADD COLUMN IF NOT EXISTS caption TEXT;`).catch(() => {});
 
     console.log('✅ Migrations executed successfully! All tables created.');
   } catch (error) {
