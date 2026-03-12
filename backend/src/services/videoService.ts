@@ -53,7 +53,7 @@ async function generateWithPixverse(prompt: string): Promise<string> {
     prompt,
     model: 'v3.5',
     quality: '540p',
-    duration: 5,
+    duration: 8,
     aspect_ratio: '9:16',
   };
 
