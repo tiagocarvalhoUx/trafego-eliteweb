@@ -158,7 +158,7 @@
       uploadData = { file: null, caption: '', preview: '' };
       toast.success('Vídeo enviado com sucesso!');
     } catch (err: any) {
-      toast.error(err.response?.data?.message ?? 'Erro ao enviar vídeo');
+      toast.error(err?.message ?? 'Erro ao enviar vídeo');
     } finally {
       uploadingVideo = false;
     }

@@ -36,7 +36,8 @@ export const videoService = {
     formData.append('video', file);
     formData.append('caption', caption);
     const token = localStorage.getItem('token');
-    const res = await fetch('/api/video/upload', {
+    // Upload directly to backend (bypass SvelteKit proxy to avoid arrayBuffer corruption)
+    const res = await fetch('https://trafego-eliteweb.onrender.com/api/video/upload', {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
