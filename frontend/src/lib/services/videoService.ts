@@ -35,10 +35,17 @@ export const videoService = {
     const formData = new FormData();
     formData.append('video', file);
     formData.append('caption', caption);
-    const { data } = await api.post('/video/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000,
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/video/upload', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Erro ao enviar vídeo' }));
+      throw new Error(err.message || `Upload failed: ${res.status}`);
+    }
+    const data = await res.json();
     return data.data;
   },
 
