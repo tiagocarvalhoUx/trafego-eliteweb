@@ -35,17 +35,13 @@ function buildVideoPrompt(data: VideoPromptData): string {
 
 function buildCaption(data: VideoPromptData): string {
   const lines: string[] = [];
-  if (data.tema) lines.push(data.tema);
-  if (data.cta) lines.push(data.cta);
+  if (data.tema) lines.push(data.tema.slice(0, 300));
+  if (data.cta) lines.push(data.cta.slice(0, 150));
 
-  const hashtags = [
-    '#reels', '#viral', '#trending', '#socialmedia', '#marketing',
-    '#digitalmarketing', '#empreendedorismo', '#negociosdigitais',
-    '#conteudo', '#dicas', '#motivacao', '#sucesso', '#brasil',
-    '#marketingdigital', '#crescimento',
-  ].join(' ');
+  const hashtags = '#reels #viral #marketing #digitalmarketing #empreendedorismo #conteudo #sucesso';
 
-  return `${lines.join('\n\n')}\n\n${hashtags}`;
+  const caption = `${lines.join('\n\n')}\n\n${hashtags}`;
+  return caption.slice(0, 2200);
 }
 
 async function generateWithPixverse(prompt: string): Promise<string> {
