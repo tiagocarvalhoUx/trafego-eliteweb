@@ -38,6 +38,11 @@ export const env = {
     apiKey: process.env.PIXVERSE_API_KEY || '',
   },
 
+  elevenlabs: {
+    apiKey: process.env.ELEVENLABS_API_KEY || '',
+    voiceId: process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB', // Adam (multilingual)
+  },
+
   supabase: {
     url: process.env.SUPABASE_URL || '',
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',

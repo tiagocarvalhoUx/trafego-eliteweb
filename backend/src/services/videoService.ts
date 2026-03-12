@@ -1,11 +1,17 @@
 /**
  * Video Generation Service
- * Uses Pixverse API for AI video generation
- * Videos are stored permanently in Supabase Storage
+ * Pipeline: Pixverse (8s video) + ElevenLabs (TTS voice) + ffmpeg (merge) + Supabase Storage
  */
 import { createClient } from '@supabase/supabase-js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { writeFile, unlink, readFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import pool from '../config/database';
 import { env } from '../config/env';
+
+const execAsync = promisify(exec);
 
 export interface VideoPromptData {
   tema: string;
@@ -18,7 +24,7 @@ export interface VideoPromptData {
   plataformas?: string;
 }
 
-function buildPrompt(data: VideoPromptData): string {
+function buildVideoPrompt(data: VideoPromptData): string {
   const parts = [`Short social media video about: "${data.tema}".`];
   if (data.estilo) parts.push(`Visual style: ${data.estilo}.`);
   if (data.tom) parts.push(`Tone: ${data.tom}.`);
@@ -29,39 +35,20 @@ function buildPrompt(data: VideoPromptData): string {
   return parts.join(' ');
 }
 
-async function uploadToSupabase(videoUrl: string, userId: number): Promise<string> {
-  if (!env.supabase.url || !env.supabase.serviceRoleKey) return videoUrl;
-
-  try {
-    const res = await fetch(videoUrl);
-    if (!res.ok) return videoUrl;
-    const videoBytes = await res.arrayBuffer();
-
-    const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
-    const filename = `${userId}/${Date.now()}.mp4`;
-
-    const { error } = await supabase.storage
-      .from('videos')
-      .upload(filename, videoBytes, { contentType: 'video/mp4', upsert: false });
-
-    if (error) return videoUrl;
-
-    const { data } = supabase.storage.from('videos').getPublicUrl(filename);
-    return data.publicUrl;
-  } catch {
-    return videoUrl;
-  }
+function buildNarration(data: VideoPromptData): string {
+  const parts: string[] = [];
+  if (data.tema) parts.push(data.tema);
+  if (data.cta) parts.push(data.cta);
+  return parts.join('. ') || data.tema;
 }
 
 async function generateWithPixverse(prompt: string): Promise<string> {
-  const traceId = crypto.randomUUID();
   const headers = {
     'API-KEY': env.pixverse.apiKey,
     'Content-Type': 'application/json',
-    'Ai-trace-id': traceId,
+    'Ai-trace-id': crypto.randomUUID(),
   };
 
-  // Create text-to-video job
   const createRes = await fetch('https://app-api.pixverse.ai/openapi/v2/video/text/generate', {
     method: 'POST',
     headers,
@@ -69,7 +56,7 @@ async function generateWithPixverse(prompt: string): Promise<string> {
       prompt,
       model: 'v4.5',
       quality: '540p',
-      duration: 5,
+      duration: 8,
       aspect_ratio: '9:16',
       motion_mode: 'normal',
       water_mark: false,
@@ -91,8 +78,7 @@ async function generateWithPixverse(prompt: string): Promise<string> {
     throw new Error(`Pixverse: no video_id returned. Response: ${JSON.stringify(createData)}`);
   }
 
-  // Poll status up to 10 minutes (120 attempts × 5s)
-  // Status: 1=success, 5=waiting, 7=moderation fail, 8=failed
+  // Poll status — 1=success, 5=waiting, 7=moderation fail, 8=failed
   for (let attempt = 0; attempt < 120; attempt++) {
     await new Promise((r) => setTimeout(r, 5000));
 
@@ -108,19 +94,86 @@ async function generateWithPixverse(prompt: string): Promise<string> {
     const resp = statusData.Resp;
     const status = resp?.status;
 
-    if (status === 1 && resp?.url) {
-      return resp.url;
-    }
-    if (status === 7) {
-      throw new Error('Pixverse: content moderation failure');
-    }
-    if (status === 8) {
-      throw new Error(`Pixverse generation failed`);
-    }
-    // status === 5 → keep polling
+    if (status === 1 && resp?.url) return resp.url;
+    if (status === 7) throw new Error('Pixverse: content moderation failure');
+    if (status === 8) throw new Error('Pixverse: generation failed');
   }
 
   throw new Error('Pixverse: timeout waiting for video generation');
+}
+
+async function generateVoiceWithElevenLabs(text: string): Promise<Buffer> {
+  const res = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${env.elevenlabs.voiceId}`,
+    {
+      method: 'POST',
+      headers: {
+        'xi-api-key': env.elevenlabs.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`ElevenLabs TTS error ${res.status}: ${err}`);
+  }
+
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function mergeVideoAndAudio(videoUrl: string, audioBuffer: Buffer): Promise<Buffer> {
+  const id = crypto.randomUUID();
+  const videoPath = join(tmpdir(), `${id}_video.mp4`);
+  const audioPath = join(tmpdir(), `${id}_audio.mp3`);
+  const outputPath = join(tmpdir(), `${id}_output.mp4`);
+
+  try {
+    // Download video
+    const videoRes = await fetch(videoUrl);
+    if (!videoRes.ok) throw new Error(`Failed to download video: ${videoRes.status}`);
+    const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
+
+    // Write temp files
+    await writeFile(videoPath, videoBuffer);
+    await writeFile(audioPath, audioBuffer);
+
+    // Merge with ffmpeg: loop/trim audio to fit video duration
+    await execAsync(
+      `ffmpeg -y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -shortest "${outputPath}"`
+    );
+
+    const result = await readFile(outputPath);
+    return result;
+  } finally {
+    // Cleanup temp files
+    await unlink(videoPath).catch(() => {});
+    await unlink(audioPath).catch(() => {});
+    await unlink(outputPath).catch(() => {});
+  }
+}
+
+async function uploadToSupabase(data: Buffer, userId: number): Promise<string> {
+  if (!env.supabase.url || !env.supabase.serviceRoleKey) {
+    throw new Error('Supabase not configured');
+  }
+
+  const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
+  const filename = `${userId}/${Date.now()}.mp4`;
+
+  const { error } = await supabase.storage
+    .from('videos')
+    .upload(filename, data, { contentType: 'video/mp4', upsert: false });
+
+  if (error) throw new Error(`Supabase upload error: ${error.message}`);
+
+  const { data: urlData } = supabase.storage.from('videos').getPublicUrl(filename);
+  return urlData.publicUrl;
 }
 
 export const videoService = {
@@ -138,14 +191,33 @@ export const videoService = {
   },
 
   async startGeneration(jobId: number, data: VideoPromptData, usuarioId: number): Promise<void> {
-    const prompt = buildPrompt(data);
+    const videoPrompt = buildVideoPrompt(data);
+    const narrationText = buildNarration(data);
+
     await pool.query(`UPDATE video_jobs SET status='processing', updated_at=NOW() WHERE id=$1`, [jobId]);
 
     try {
-      const pixverseUrl = await generateWithPixverse(prompt);
+      // Step 1: Generate video (Pixverse) and voice (ElevenLabs) in parallel
+      const [pixverseUrl, audioBuffer] = await Promise.all([
+        generateWithPixverse(videoPrompt),
+        env.elevenlabs.apiKey
+          ? generateVoiceWithElevenLabs(narrationText)
+          : Promise.resolve(null as any),
+      ]);
 
-      // Upload to Supabase Storage for permanent hosting
-      const videoUrl = await uploadToSupabase(pixverseUrl, usuarioId);
+      let finalVideoBuffer: Buffer;
+
+      if (audioBuffer) {
+        // Step 2: Merge video + audio with ffmpeg
+        finalVideoBuffer = await mergeVideoAndAudio(pixverseUrl, audioBuffer);
+      } else {
+        // No ElevenLabs key — download video as-is
+        const res = await fetch(pixverseUrl);
+        finalVideoBuffer = Buffer.from(await res.arrayBuffer());
+      }
+
+      // Step 3: Upload merged video to Supabase Storage
+      const videoUrl = await uploadToSupabase(finalVideoBuffer, usuarioId);
 
       await pool.query(
         `UPDATE video_jobs SET status='done', video_url=$1, updated_at=NOW() WHERE id=$2`,
