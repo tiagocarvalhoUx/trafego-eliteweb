@@ -25,7 +25,7 @@ app.use(helmet());
 
 // CORS
 app.use(cors({
-  origin: env.frontendUrl,
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -41,9 +41,9 @@ app.use('/api/', limiter);
 
 // Auth rate limit (stricter)
 const authLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10,
-  message: { success: false, message: 'Muitas tentativas de login, tente novamente em 1 hora' },
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30,
+  message: { success: false, message: 'Muitas tentativas de login, tente novamente em 15 minutos' },
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
