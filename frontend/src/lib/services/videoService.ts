@@ -53,4 +53,8 @@ export const videoService = {
   async publishToInstagram(id: number, caption: string): Promise<void> {
     await api.post(`/video/${id}/publish/instagram`, { caption });
   },
+
+  async publishToTikTok(id: number, caption: string): Promise<void> {
+    await api.post(`/video/${id}/publish/tiktok`, { caption });
+  },
 };

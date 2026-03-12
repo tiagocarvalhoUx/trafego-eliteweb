@@ -93,4 +93,16 @@ export const videoController = {
       res.status(500).json({ success: false, message: error?.message || 'Erro ao publicar no Instagram' });
     }
   },
+
+  async publishToTikTok(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const jobId = parseInt(req.params.id);
+      const caption = (req.body.caption as string) || '';
+      await videoService.publishToTikTok(jobId, req.userId!, caption);
+      res.json({ success: true, message: 'Publicado no TikTok com sucesso!' });
+    } catch (error: any) {
+      console.error('Publish to TikTok error:', error?.response?.data || error);
+      res.status(500).json({ success: false, message: error?.message || 'Erro ao publicar no TikTok' });
+    }
+  },
 };

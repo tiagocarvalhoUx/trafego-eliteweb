@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import pool from '../config/database';
 import { env } from '../config/env';
 import { instagramService } from './instagramService';
+import { tiktokService } from './tiktokService';
 
 export interface VideoPromptData {
   tema: string;
@@ -264,5 +265,29 @@ export const videoService = {
       `UPDATE video_jobs SET publicado_instagram = true, caption = $1, updated_at = NOW() WHERE id = $2`,
       [safeCaption, jobId]
     );
+  },
+
+  async publishToTikTok(jobId: number, usuarioId: number, caption: string): Promise<void> {
+    const job = await this.getJob(jobId, usuarioId);
+    if (!job || !job.video_url) throw new Error('Vídeo não encontrado');
+
+    const { rows } = await pool.query(
+      `SELECT access_token FROM contas_sociais
+       WHERE usuario_id = $1 AND plataforma = 'tiktok' AND ativo = true LIMIT 1`,
+      [usuarioId]
+    );
+    if (rows.length === 0) throw new Error('Nenhuma conta TikTok conectada');
+
+    const { access_token } = rows[0];
+    const safeCaption = caption.slice(0, 150);
+
+    console.log(`[publishToTikTok] Publishing job ${jobId} to TikTok...`);
+    await tiktokService.publishVideo(access_token, job.video_url, safeCaption);
+
+    await pool.query(
+      `UPDATE video_jobs SET publicado_tiktok = true, caption = $1, updated_at = NOW() WHERE id = $2`,
+      [caption.slice(0, 2200), jobId]
+    );
+    console.log(`[publishToTikTok] Job ${jobId} published to TikTok`);
   },
 };

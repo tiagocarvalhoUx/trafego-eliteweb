@@ -112,9 +112,58 @@ export const tiktokService = {
     return data;
   },
 
+  // Publish video to TikTok using Content Posting API (pull from URL)
+  async publishVideo(accessToken: string, videoUrl: string, caption: string): Promise<{ publish_id: string }> {
+    // Step 1: Initialize publish via pull URL
+    const { data: initData } = await axios.post(
+      `${TIKTOK_API_URL}/post/publish/video/init/`,
+      {
+        post_info: {
+          title: caption.slice(0, 150),
+          privacy_level: 'SELF_ONLY',
+          disable_duet: false,
+          disable_comment: false,
+          disable_stitch: false,
+        },
+        source_info: {
+          source: 'PULL_FROM_URL',
+          video_url: videoUrl,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (initData.error?.code !== 'ok') {
+      throw new Error(`TikTok publish error: ${initData.error?.message || JSON.stringify(initData)}`);
+    }
+
+    return { publish_id: initData.data?.publish_id };
+  },
+
+  // Check publish status
+  async getPublishStatus(accessToken: string, publishId: string): Promise<string> {
+    const { data } = await axios.post(
+      `${TIKTOK_API_URL}/post/publish/status/fetch/`,
+      { publish_id: publishId },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    // status: PROCESSING_UPLOAD, PROCESSING_DOWNLOAD, SEND_TO_USER_INBOX, PUBLISH_COMPLETE, FAILED
+    return data.data?.status || 'UNKNOWN';
+  },
+
   // Get OAuth authorization URL
   getAuthUrl(clientKey: string, redirectUri: string, state: string): string {
-    const scopes = ['user.info.basic', 'video.list', 'video.insights'].join(',');
+    const scopes = ['user.info.basic', 'video.list', 'video.publish'].join(',');
     return `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&response_type=code&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
   },
 };

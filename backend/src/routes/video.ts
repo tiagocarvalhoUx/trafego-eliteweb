@@ -10,6 +10,7 @@ router.get('/', videoController.listJobs);
 router.post('/', videoController.createJob);
 router.post('/upload', upload.single('video'), videoController.uploadVideo);
 router.post('/:id/publish/instagram', videoController.publishToInstagram);
+router.post('/:id/publish/tiktok', videoController.publishToTikTok);
 router.get('/:id', videoController.getJob);
 router.delete('/:id', videoController.deleteJob);
 

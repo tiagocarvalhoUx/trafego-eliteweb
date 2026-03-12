@@ -29,6 +29,7 @@
 
   let publishCaption = '';
   let publishJobId: number | null = null;
+  let publishPlatform: 'instagram' | 'tiktok' = 'instagram';
 
   let newVideo = {
     tema: '',
@@ -164,22 +165,27 @@
     }
   }
 
-  function openPublishModal(job: any) {
+  function openPublishModal(job: any, platform: 'instagram' | 'tiktok') {
     publishJobId = job.id;
     publishCaption = job.caption || '';
+    publishPlatform = platform;
   }
 
-  async function handlePublishInstagram() {
+  async function handlePublish() {
     if (!publishJobId) return;
     publishingId = publishJobId;
     try {
-      await videoService.publishToInstagram(publishJobId, publishCaption);
+      if (publishPlatform === 'instagram') {
+        await videoService.publishToInstagram(publishJobId, publishCaption);
+      } else {
+        await videoService.publishToTikTok(publishJobId, publishCaption);
+      }
       videoJobs = await videoService.listJobs();
       publishJobId = null;
       publishCaption = '';
-      toast.success('Publicado no Instagram com sucesso!');
+      toast.success(`Publicado no ${publishPlatform === 'instagram' ? 'Instagram' : 'TikTok'} com sucesso!`);
     } catch (err: any) {
-      toast.error(err.response?.data?.message ?? 'Erro ao publicar');
+      toast.error(err.response?.data?.message ?? err?.message ?? 'Erro ao publicar');
     } finally {
       publishingId = null;
     }
@@ -481,14 +487,25 @@
                   </a>
                   {#if !job.publicado_instagram}
                     <button
-                      on:click={() => openPublishModal(job)}
+                      on:click={() => openPublishModal(job, 'instagram')}
                       disabled={publishingId === job.id}
                       class="text-xs px-3 py-1.5 rounded-lg border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors"
                     >
-                      {publishingId === job.id ? 'Publicando...' : 'Publicar no Instagram'}
+                      Instagram
                     </button>
                   {:else}
-                    <span class="text-xs px-3 py-1.5 text-green-400">Publicado</span>
+                    <span class="text-xs px-3 py-1.5 text-green-400">IG</span>
+                  {/if}
+                  {#if !job.publicado_tiktok}
+                    <button
+                      on:click={() => openPublishModal(job, 'tiktok')}
+                      disabled={publishingId === job.id}
+                      class="text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+                    >
+                      TikTok
+                    </button>
+                  {:else}
+                    <span class="text-xs px-3 py-1.5 text-green-400">TT</span>
                   {/if}
                 {/if}
                 <button
@@ -598,7 +615,9 @@
   {#if publishJobId}
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" on:click|self={() => { publishJobId = null; }} on:keydown={(e) => { if (e.key === 'Escape') publishJobId = null; }}>
       <div class="card w-full max-w-lg mx-4 border-purple-500/30">
-        <h3 class="text-base font-semibold text-white mb-4">Publicar no Instagram</h3>
+        <h3 class="text-base font-semibold text-white mb-4">
+          Publicar no {publishPlatform === 'instagram' ? 'Instagram' : 'TikTok'}
+        </h3>
         <div>
           <label class="block text-sm text-gray-300 mb-1.5">Texto do post</label>
           <textarea
@@ -607,11 +626,11 @@
             rows="4"
             placeholder="Escreva o texto do post com hashtags..."
           ></textarea>
-          <p class="text-gray-600 text-xs mt-1">{publishCaption.length}/2200 caracteres</p>
+          <p class="text-gray-600 text-xs mt-1">{publishCaption.length}/{publishPlatform === 'tiktok' ? '150' : '2200'} caracteres</p>
         </div>
         <div class="flex gap-3 mt-4">
-          <button on:click={handlePublishInstagram} disabled={publishingId !== null} class="btn-primary">
-            {publishingId ? 'Publicando...' : 'Publicar no Instagram'}
+          <button on:click={handlePublish} disabled={publishingId !== null} class="btn-primary">
+            {publishingId ? 'Publicando...' : `Publicar no ${publishPlatform === 'instagram' ? 'Instagram' : 'TikTok'}`}
           </button>
           <button on:click={() => { publishJobId = null; }} class="btn-secondary">Cancelar</button>
         </div>
