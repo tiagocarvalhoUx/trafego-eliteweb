@@ -121,19 +121,14 @@ export const tiktokService = {
     return data.data || data;
   },
 
-  // Publish video to TikTok using Content Posting API (pull from URL)
+  // Publish video to TikTok using Content Posting API
+  // Uses video.upload scope (sends to creator's inbox as draft)
   async publishVideo(accessToken: string, videoUrl: string, caption: string): Promise<{ publish_id: string }> {
-    // Step 1: Initialize publish via pull URL
+    // Use /post/publish/inbox/video/init/ which requires video.upload scope
+    // This sends the video to the creator's TikTok inbox for review before publishing
     const { data: initData } = await axios.post(
-      `${TIKTOK_API_URL}/post/publish/video/init/`,
+      `${TIKTOK_API_URL}/post/publish/inbox/video/init/`,
       {
-        post_info: {
-          title: caption.slice(0, 150),
-          privacy_level: 'SELF_ONLY',
-          disable_duet: false,
-          disable_comment: false,
-          disable_stitch: false,
-        },
         source_info: {
           source: 'PULL_FROM_URL',
           video_url: videoUrl,
@@ -146,6 +141,8 @@ export const tiktokService = {
         },
       }
     );
+
+    console.log('TikTok publish response:', JSON.stringify(initData));
 
     if (initData.error?.code !== 'ok') {
       throw new Error(`TikTok publish error: ${initData.error?.message || JSON.stringify(initData)}`);
