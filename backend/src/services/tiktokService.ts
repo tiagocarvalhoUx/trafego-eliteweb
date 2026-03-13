@@ -169,7 +169,7 @@ export const tiktokService = {
 
   // Get OAuth authorization URL
   getAuthUrl(clientKey: string, redirectUri: string, state: string): string {
-    const scopes = ['user.info.basic', 'video.publish', 'video.upload'].join(',');
+    const scopes = ['user.info.basic', 'video.upload'].join(',');
     return `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&response_type=code&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
   },
 };
