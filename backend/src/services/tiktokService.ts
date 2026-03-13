@@ -121,17 +121,25 @@ export const tiktokService = {
     return data.data || data;
   },
 
-  // Publish video to TikTok using Content Posting API
+  // Publish video to TikTok using Content Posting API (FILE_UPLOAD method)
   // Uses video.upload scope (sends to creator's inbox as draft)
   async publishVideo(accessToken: string, videoUrl: string, caption: string): Promise<{ publish_id: string }> {
-    // Use /post/publish/inbox/video/init/ which requires video.upload scope
-    // This sends the video to the creator's TikTok inbox for review before publishing
+    // Step 1: Download the video file
+    console.log('[TikTok] Downloading video from:', videoUrl);
+    const videoResponse = await axios.get(videoUrl, { responseType: 'arraybuffer' });
+    const videoBuffer = Buffer.from(videoResponse.data);
+    const videoSize = videoBuffer.length;
+    console.log('[TikTok] Video downloaded, size:', videoSize);
+
+    // Step 2: Initialize upload with FILE_UPLOAD source
     const { data: initData } = await axios.post(
       `${TIKTOK_API_URL}/post/publish/inbox/video/init/`,
       {
         source_info: {
-          source: 'PULL_FROM_URL',
-          video_url: videoUrl,
+          source: 'FILE_UPLOAD',
+          video_size: videoSize,
+          chunk_size: videoSize,
+          total_chunk_count: 1,
         },
       },
       {
@@ -142,13 +150,32 @@ export const tiktokService = {
       }
     );
 
-    console.log('TikTok publish response:', JSON.stringify(initData));
+    console.log('[TikTok] Init response:', JSON.stringify(initData));
 
     if (initData.error?.code !== 'ok') {
-      throw new Error(`TikTok publish error: ${initData.error?.message || JSON.stringify(initData)}`);
+      throw new Error(`TikTok init error: ${initData.error?.message || JSON.stringify(initData)}`);
     }
 
-    return { publish_id: initData.data?.publish_id };
+    const uploadUrl = initData.data?.upload_url;
+    const publishId = initData.data?.publish_id;
+
+    if (!uploadUrl) {
+      throw new Error('TikTok did not return upload_url');
+    }
+
+    // Step 3: Upload the video chunk
+    console.log('[TikTok] Uploading video to:', uploadUrl);
+    const uploadResponse = await axios.put(uploadUrl, videoBuffer, {
+      headers: {
+        'Content-Type': 'video/mp4',
+        'Content-Range': `bytes 0-${videoSize - 1}/${videoSize}`,
+        'Content-Length': videoSize.toString(),
+      },
+    });
+
+    console.log('[TikTok] Upload response status:', uploadResponse.status);
+
+    return { publish_id: publishId };
   },
 
   // Check publish status
