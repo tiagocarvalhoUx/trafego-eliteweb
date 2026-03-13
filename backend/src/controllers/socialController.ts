@@ -125,7 +125,7 @@ export const socialController = {
       }
 
       console.log('TikTok callback - code:', code, 'userId:', userId);
-      console.log('TikTok config - clientKey:', env.tiktok.clientKey, 'redirectUri:', env.tiktok.redirectUri);
+      console.log('TikTok config - clientKey:', env.tiktok.clientKey, 'secretLen:', env.tiktok.clientSecret?.length, 'secretStart:', env.tiktok.clientSecret?.substring(0, 8), 'secretEnd:', env.tiktok.clientSecret?.slice(-4), 'redirectUri:', env.tiktok.redirectUri);
 
       const tokenData = await tiktokService.exchangeCode(
         code as string,
