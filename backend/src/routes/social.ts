@@ -4,10 +4,11 @@ import { authMiddleware } from '../middlewares/authMiddleware';
 
 const router = Router();
 
-// Public endpoints (no auth needed)
+// Public endpoints (no auth needed - callbacks come from external redirects)
 router.post('/instagram/deauthorize', (_req, res) => res.json({ success: true }));
 router.post('/instagram/data-deletion', (_req, res) => res.json({ success: true, url: '', confirmation_code: '' }));
 router.get('/instagram/callback', socialController.instagramCallback);
+router.get('/tiktok/callback', socialController.tiktokCallback);
 
 router.use(authMiddleware);
 
@@ -20,6 +21,5 @@ router.get('/instagram/auth-url', socialController.getInstagramAuthUrl);
 
 // TikTok OAuth
 router.get('/tiktok/auth-url', socialController.getTikTokAuthUrl);
-router.get('/tiktok/callback', socialController.tiktokCallback);
 
 export default router;

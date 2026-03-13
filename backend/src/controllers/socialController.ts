@@ -103,19 +103,28 @@ export const socialController = {
 
   // GET /api/social/tiktok/auth-url
   async getTikTokAuthUrl(req: AuthRequest, res: Response): Promise<void> {
-    const state = `user_${req.userId}_${Date.now()}`;
+    const state = Buffer.from(JSON.stringify({ userId: req.userId })).toString('base64');
     const url = tiktokService.getAuthUrl(env.tiktok.clientKey, env.tiktok.redirectUri, state);
     res.json({ success: true, data: { url } });
   },
 
-  // GET /api/social/tiktok/callback?code=xxx
+  // GET /api/social/tiktok/callback?code=xxx&state=xxx
   async tiktokCallback(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { code } = req.query;
+      const { code, state } = req.query;
+      let userId = req.userId;
+      if (!userId && state) {
+        try {
+          const decoded = JSON.parse(Buffer.from(state as string, 'base64').toString());
+          userId = decoded.userId;
+        } catch {}
+      }
       if (!code) {
         res.status(400).json({ success: false, message: 'Código de autorização não fornecido' });
         return;
       }
+
+      console.log('TikTok callback - code:', code, 'userId:', userId);
 
       const tokenData = await tiktokService.exchangeCode(
         code as string,
@@ -136,17 +145,15 @@ export const socialController = {
            refresh_token = EXCLUDED.refresh_token,
            token_expires_at = EXCLUDED.token_expires_at,
            ativo = true`,
-        [req.userId, tokenData.access_token, tokenData.refresh_token, expiresAt, userInfo.display_name, userInfo.open_id]
+        [userId, tokenData.access_token, tokenData.refresh_token, expiresAt, userInfo.display_name, userInfo.open_id]
       );
 
-      res.json({
-        success: true,
-        message: 'TikTok conectado com sucesso!',
-        data: { display_name: userInfo.display_name, followers: userInfo.follower_count },
-      });
-    } catch (error) {
-      console.error('TikTok callback error:', error);
-      res.status(500).json({ success: false, message: 'Erro ao conectar TikTok' });
+      // Redirect to frontend settings page after successful connection
+      res.redirect(`${env.frontendUrl || 'https://trafego-eliteweb.vercel.app'}/settings?tiktok=connected`);
+    } catch (error: any) {
+      const detail = error?.response?.data || error?.message || error;
+      console.error('TikTok callback error:', JSON.stringify(detail));
+      res.status(500).json({ success: false, message: 'Erro ao conectar TikTok', detail });
     }
   },
 
