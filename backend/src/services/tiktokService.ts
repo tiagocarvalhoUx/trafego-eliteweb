@@ -44,12 +44,13 @@ export const tiktokService = {
   async getUserInfo(accessToken: string): Promise<TikTokUserInfo> {
     const { data } = await axios.get(`${TIKTOK_API_URL}/user/info/`, {
       params: {
-        fields: 'open_id,display_name,avatar_url,follower_count,following_count,video_count,likes_count,username',
+        fields: 'open_id,display_name,avatar_url',
       },
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
     });
+    console.log('TikTok user info response:', JSON.stringify(data));
     return data.data?.user || data.data;
   },
 
@@ -91,25 +92,33 @@ export const tiktokService = {
 
   // Exchange auth code for access token
   async exchangeCode(code: string, clientKey: string, clientSecret: string, redirectUri: string): Promise<{ access_token: string; refresh_token: string; expires_in: number; refresh_expires_in: number }> {
-    const { data } = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', {
+    const params = new URLSearchParams({
       client_key: clientKey,
       client_secret: clientSecret,
       code,
       grant_type: 'authorization_code',
       redirect_uri: redirectUri,
     });
-    return data;
+    const { data } = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    console.log('TikTok token response:', JSON.stringify(data));
+    // Token may be nested under data or at top level
+    return data.data || data;
   },
 
   // Refresh access token
   async refreshToken(refreshToken: string, clientKey: string, clientSecret: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
-    const { data } = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', {
+    const params = new URLSearchParams({
       client_key: clientKey,
       client_secret: clientSecret,
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
     });
-    return data;
+    const { data } = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    return data.data || data;
   },
 
   // Publish video to TikTok using Content Posting API (pull from URL)
