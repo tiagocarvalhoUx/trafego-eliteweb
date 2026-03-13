@@ -125,6 +125,7 @@ export const socialController = {
       }
 
       console.log('TikTok callback - code:', code, 'userId:', userId);
+      console.log('TikTok config - clientKey:', env.tiktok.clientKey, 'redirectUri:', env.tiktok.redirectUri);
 
       const tokenData = await tiktokService.exchangeCode(
         code as string,
@@ -132,6 +133,16 @@ export const socialController = {
         env.tiktok.clientSecret,
         env.tiktok.redirectUri
       );
+
+      console.log('TikTok tokenData keys:', Object.keys(tokenData));
+      console.log('TikTok access_token exists:', !!tokenData.access_token);
+      console.log('TikTok access_token value:', tokenData.access_token?.substring(0, 20) + '...');
+
+      if (!tokenData.access_token) {
+        console.error('TikTok: No access_token in response:', JSON.stringify(tokenData));
+        res.status(500).json({ success: false, message: 'TikTok não retornou access_token', detail: tokenData });
+        return;
+      }
 
       const userInfo = await tiktokService.getUserInfo(tokenData.access_token);
 
