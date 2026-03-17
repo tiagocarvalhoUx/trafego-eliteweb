@@ -9,7 +9,7 @@
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
-  const publicRoutes = ['/login', '/register'];
+  const publicRoutes = ['/login', '/register', '/privacy'];
   $: isPublicRoute = publicRoutes.includes($page.url.pathname);
 
   let sidebarOpen = false;
