@@ -22,21 +22,22 @@ export const automationService = {
     console.log(`[Automation] Found ${comments.length} comments on post ${postPlataformaId}`);
 
     for (const comment of comments) {
+      const username = comment.from?.username || comment.username || 'unknown';
       for (const automacao of automacoes) {
         const keyword = automacao.palavra_chave?.toLowerCase();
         const commentText = comment.text?.toLowerCase();
 
         if (keyword && commentText?.includes(keyword)) {
-          console.log(`[Automation] Keyword "${keyword}" matched in comment by @${comment.username}`);
+          console.log(`[Automation] Keyword "${keyword}" matched in comment by @${username}`);
 
           // Check if this user was already processed for this automation
           const existingLead = await pool.query(
             'SELECT id FROM leads WHERE usuario_plataforma = $1 AND post_id = $2 AND palavra_chave = $3',
-            [comment.username, postId, automacao.palavra_chave]
+            [username, postId, automacao.palavra_chave]
           );
 
           if (existingLead.rows.length > 0) {
-            console.log(`[Automation] @${comment.username} already processed, skipping`);
+            console.log(`[Automation] @${username} already processed, skipping`);
             continue;
           }
 
@@ -53,7 +54,7 @@ export const automationService = {
              VALUES ($1, $2, 'instagram', $3, $4, $5, $6) RETURNING id`,
             [
               usuarioId,
-              comment.username,
+              username,
               `Comentou "${automacao.palavra_chave}" no post`,
               postId,
               automacao.palavra_chave,
@@ -65,7 +66,7 @@ export const automationService = {
           if (automacao.mensagem_resposta) {
             const recipientIgUserId = comment.from?.id;
             if (!recipientIgUserId) {
-              console.warn(`[Automation] No from.id for comment by @${comment.username}, cannot send DM`);
+              console.warn(`[Automation] No from.id for comment by @${username}, cannot send DM`);
             } else {
               try {
                 await instagramService.sendDirectMessage(
@@ -92,12 +93,12 @@ export const automationService = {
                   usuarioId,
                   'lead_capturado',
                   'Novo lead capturado!',
-                  `@${comment.username} comentou "${automacao.palavra_chave}" e recebeu sua mensagem automática.`
+                  `@${username} comentou "${automacao.palavra_chave}" e recebeu sua mensagem automática.`
                 );
 
-                console.log(`[Automation] DM sent to @${comment.username} (${recipientIgUserId})`);
+                console.log(`[Automation] DM sent to @${username} (${recipientIgUserId})`);
               } catch (error) {
-                console.error(`[Automation] Failed to send DM to @${comment.username}:`, error);
+                console.error(`[Automation] Failed to send DM to @${username}:`, error);
               }
             }
           }

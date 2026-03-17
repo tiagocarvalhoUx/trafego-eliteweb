@@ -329,15 +329,16 @@ export const automationController = {
         }
 
         for (const comment of comments) {
+          const username = comment.from?.username || comment.username || 'unknown';
           for (const automacao of activeAutos) {
             const keyword = automacao.palavra_chave?.toLowerCase();
             const commentText = comment.text?.toLowerCase();
             if (keyword && commentText?.includes(keyword)) {
-              log(`  MATCH! @${comment.username} said "${comment.text}" matches keyword "${automacao.palavra_chave}"`);
+              log(`  MATCH! @${username} said "${comment.text}" matches keyword "${automacao.palavra_chave}"`);
 
               const existing = await pool.query(
                 'SELECT id FROM leads WHERE usuario_plataforma = $1 AND post_id = $2 AND palavra_chave = $3',
-                [comment.username, post.id, automacao.palavra_chave]
+                [username, post.id, automacao.palavra_chave]
               );
               if (existing.rows.length > 0) {
                 log(`  Already processed, skipping`);
@@ -347,15 +348,15 @@ export const automationController = {
               await pool.query(
                 `INSERT INTO leads (usuario_id, usuario_plataforma, plataforma, origem, post_id, palavra_chave, mensagem_enviada)
                  VALUES ($1, $2, 'instagram', $3, $4, $5, $6)`,
-                [req.userId, comment.username, `Comentou "${automacao.palavra_chave}" no post`, post.id, automacao.palavra_chave, automacao.mensagem_resposta]
+                [req.userId, username, `Comentou "${automacao.palavra_chave}" no post`, post.id, automacao.palavra_chave, automacao.mensagem_resposta]
               );
               leadsCreated++;
-              log(`  Lead created for @${comment.username}!`);
+              log(`  Lead created for @${username}!`);
 
               if (automacao.mensagem_resposta && comment.from?.id) {
                 try {
                   await instagramService.sendDirectMessage(conta.conta_id_plataforma, comment.from.id, automacao.mensagem_resposta, conta.access_token);
-                  log(`  DM sent to @${comment.username}`);
+                  log(`  DM sent to @${username}`);
                 } catch (e: any) {
                   log(`  DM failed: ${e.response?.data?.error?.message || e.message}`);
                 }
