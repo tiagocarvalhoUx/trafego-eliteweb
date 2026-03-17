@@ -2,6 +2,7 @@ import { Response } from 'express';
 import pool from '../config/database';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { automationService } from '../services/automationService';
+import { analyticsService } from '../services/analyticsService';
 
 export const automationController = {
   // GET /api/automation
@@ -169,8 +170,33 @@ export const automationController = {
 
   // POST /api/automation/run-cycle
   async runCycle(req: AuthRequest, res: Response): Promise<void> {
-    res.json({ success: true, message: 'Ciclo de automação iniciado em background' });
-    automationService.runAutomationCycle().catch(console.error);
+    res.json({ success: true, message: 'Sincronizando posts e executando automação em background' });
+
+    // First sync posts from Instagram, then run automation
+    (async () => {
+      try {
+        // Sync posts for user's active accounts
+        const { rows: contas } = await pool.query(
+          `SELECT id, plataforma, access_token FROM contas_sociais
+           WHERE usuario_id = $1 AND ativo = true`,
+          [req.userId]
+        );
+
+        for (const conta of contas) {
+          if (conta.plataforma === 'instagram') {
+            console.log(`[RunCycle] Syncing Instagram posts for account ${conta.id}...`);
+            await analyticsService.collectInstagramData(conta.id, conta.access_token);
+            console.log(`[RunCycle] Sync complete for account ${conta.id}`);
+          }
+        }
+
+        // Now run automation cycle
+        await automationService.runAutomationCycle();
+        console.log('[RunCycle] Automation cycle complete');
+      } catch (error) {
+        console.error('[RunCycle] Error:', error);
+      }
+    })();
   },
 
   // PUT /api/automation/notifications/:id/read
