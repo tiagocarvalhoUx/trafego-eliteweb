@@ -3,6 +3,7 @@ import pool from '../config/database';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { automationService } from '../services/automationService';
 import { analyticsService } from '../services/analyticsService';
+import { instagramService } from '../services/instagramService';
 
 export const automationController = {
   // GET /api/automation
@@ -197,6 +198,43 @@ export const automationController = {
         console.error('[RunCycle] Error:', error);
       }
     })();
+  },
+
+  // GET /api/automation/debug-comments - Debug endpoint to test Instagram comments API
+  async debugComments(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { rows: contas } = await pool.query(
+        `SELECT id, access_token, conta_id_plataforma FROM contas_sociais
+         WHERE usuario_id = $1 AND plataforma = 'instagram' AND ativo = true LIMIT 1`,
+        [req.userId]
+      );
+      if (contas.length === 0) {
+        res.json({ error: 'No active Instagram account' });
+        return;
+      }
+
+      const { access_token } = contas[0];
+
+      // Get recent media with comments_count
+      const media = await instagramService.getMedia(access_token, 5);
+      const results: any[] = [];
+
+      for (const m of media.slice(0, 3)) {
+        const comments = await instagramService.getComments(m.id, access_token);
+        results.push({
+          post_id: m.id,
+          caption: (m.caption || '').substring(0, 50),
+          comments_count_from_api: m.comments_count,
+          comments_fetched: comments.length,
+          comments: comments.slice(0, 5),
+        });
+      }
+
+      res.json({ success: true, account_id: contas[0].id, ig_user_id: contas[0].conta_id_plataforma, posts: results });
+    } catch (error: any) {
+      console.error('Debug comments error:', error.response?.data || error.message);
+      res.status(500).json({ error: error.response?.data || error.message });
+    }
   },
 
   // PUT /api/automation/notifications/:id/read
