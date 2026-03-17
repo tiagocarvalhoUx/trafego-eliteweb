@@ -59,7 +59,12 @@ export const instagramService = {
         access_token: accessToken,
       },
     });
-    return data.data || [];
+    const medias = data.data || [];
+    console.log(`[getMedia] Found ${medias.length} posts. IDs: ${medias.map((m: any) => m.id).join(', ')}`);
+    for (const m of medias.slice(0, 3)) {
+      console.log(`[getMedia] Post ${m.id}: comments=${m.comments_count}, caption="${(m.caption || '').substring(0, 40)}..."`);
+    }
+    return medias;
   },
 
   // Get post insights (requires Instagram Business/Creator account)
@@ -89,14 +94,32 @@ export const instagramService = {
 
   // Get comments on a post
   async getComments(mediaId: string, accessToken: string): Promise<any[]> {
-    const { data } = await axios.get(`${IG_GRAPH_URL}/${mediaId}/comments`, {
-      params: {
-        fields: 'id,text,username,timestamp,from',
-        access_token: accessToken,
-      },
-    });
-    console.log(`[getComments] Raw response for ${mediaId}:`, JSON.stringify(data));
-    return data.data || [];
+    try {
+      // First try with 'from' field (needed for DMs)
+      const { data } = await axios.get(`${IG_GRAPH_URL}/${mediaId}/comments`, {
+        params: {
+          fields: 'id,text,username,timestamp,from{id,username}',
+          access_token: accessToken,
+        },
+      });
+      console.log(`[getComments] Response for ${mediaId}: ${data.data?.length || 0} comments`);
+      if (data.data && data.data.length > 0) {
+        return data.data;
+      }
+
+      // Retry without 'from' field in case it causes empty results
+      const { data: data2 } = await axios.get(`${IG_GRAPH_URL}/${mediaId}/comments`, {
+        params: {
+          fields: 'id,text,username,timestamp',
+          access_token: accessToken,
+        },
+      });
+      console.log(`[getComments] Retry without 'from' for ${mediaId}: ${data2.data?.length || 0} comments`);
+      return data2.data || [];
+    } catch (error: any) {
+      console.error(`[getComments] Error for ${mediaId}:`, error.response?.data || error.message);
+      return [];
+    }
   },
 
   // Send a direct message via Instagram Messaging API
