@@ -30,9 +30,11 @@
         labels: { style: { colors: '#6b7280', fontSize: '12px' } },
         axisBorder: { color: '#374151' },
         axisTicks: { color: '#374151' },
+        title: { style: { color: '#6b7280' } },
       },
       yaxis: {
         labels: { style: { colors: '#6b7280', fontSize: '12px' } },
+        title: { style: { color: '#6b7280' } },
       },
       grid: {
         borderColor: '#1f2937',
@@ -40,6 +42,7 @@
       },
       legend: {
         labels: { colors: '#9ca3af' },
+        offsetY: 0,
       },
       dataLabels: { enabled: false },
       stroke: { curve: 'smooth', width: 2 },
@@ -51,15 +54,20 @@
           opacityTo: 0.05,
           stops: [0, 100],
         },
-      } : undefined,
+      } : { type: 'solid' },
       tooltip: {
         theme: 'dark',
         style: { fontSize: '12px' },
       },
-      title: title ? {
-        text: title,
+      title: {
+        text: title || '',
         style: { color: '#f9fafb', fontSize: '14px', fontWeight: '600' },
-      } : undefined,
+        offsetY: 0,
+      },
+      subtitle: {
+        text: '',
+        offsetY: 0,
+      },
     };
 
     chart = new ApexCharts(chartEl, options);
