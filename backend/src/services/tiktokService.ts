@@ -122,8 +122,9 @@ export const tiktokService = {
   },
 
   // Publish video to TikTok using Content Posting API (FILE_UPLOAD method)
-  // Uses video.upload scope (sends to creator's inbox as draft)
-  async publishVideo(accessToken: string, videoUrl: string, caption: string): Promise<{ publish_id: string }> {
+  // directPublish=true  → /post/publish/video/init/ (requires video.publish scope, Production only)
+  // directPublish=false → /post/publish/inbox/video/init/ (requires video.upload scope, Sandbox compatible)
+  async publishVideo(accessToken: string, videoUrl: string, caption: string, directPublish = false): Promise<{ publish_id: string }> {
     // Step 1: Download the video file
     console.log('[TikTok] Downloading video from:', videoUrl);
     const videoResponse = await axios.get(videoUrl, { responseType: 'arraybuffer' });
@@ -131,24 +132,37 @@ export const tiktokService = {
     const videoSize = videoBuffer.length;
     console.log('[TikTok] Video downloaded, size:', videoSize);
 
-    // Step 2: Initialize upload with FILE_UPLOAD source
-    const { data: initData } = await axios.post(
-      `${TIKTOK_API_URL}/post/publish/inbox/video/init/`,
-      {
-        source_info: {
-          source: 'FILE_UPLOAD',
-          video_size: videoSize,
-          chunk_size: videoSize,
-          total_chunk_count: 1,
-        },
+    // Step 2: Initialize upload — choose endpoint based on mode
+    const initEndpoint = directPublish
+      ? `${TIKTOK_API_URL}/post/publish/video/init/`
+      : `${TIKTOK_API_URL}/post/publish/inbox/video/init/`;
+
+    const initBody: any = {
+      source_info: {
+        source: 'FILE_UPLOAD',
+        video_size: videoSize,
+        chunk_size: videoSize,
+        total_chunk_count: 1,
       },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    };
+
+    // Direct publish supports post_info with title/description
+    if (directPublish) {
+      initBody.post_info = {
+        title: caption.substring(0, 150),
+        privacy_level: 'PUBLIC_TO_EVERYONE',
+      };
+    }
+
+    console.log('[TikTok] Mode:', directPublish ? 'DIRECT PUBLISH' : 'INBOX/DRAFT');
+    console.log('[TikTok] Init endpoint:', initEndpoint);
+
+    const { data: initData } = await axios.post(initEndpoint, initBody, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
     console.log('[TikTok] Init response:', JSON.stringify(initData));
 
@@ -195,8 +209,10 @@ export const tiktokService = {
   },
 
   // Get OAuth authorization URL
-  getAuthUrl(clientKey: string, redirectUri: string, state: string): string {
-    const scopes = ['user.info.basic', 'video.upload'].join(',');
+  getAuthUrl(clientKey: string, redirectUri: string, state: string, directPublish = false): string {
+    const scopes = directPublish
+      ? ['user.info.basic', 'video.publish', 'video.upload'].join(',')
+      : ['user.info.basic', 'video.upload'].join(',');
     return `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&response_type=code&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
   },
 };

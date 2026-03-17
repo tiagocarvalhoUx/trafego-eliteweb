@@ -282,7 +282,7 @@ export const videoService = {
     const safeCaption = caption.slice(0, 150);
 
     console.log(`[publishToTikTok] Publishing job ${jobId} to TikTok...`);
-    await tiktokService.publishVideo(access_token, job.video_url, safeCaption);
+    await tiktokService.publishVideo(access_token, job.video_url, safeCaption, env.tiktok.directPublish);
 
     await pool.query(
       `UPDATE video_jobs SET publicado_tiktok = true, caption = $1, updated_at = NOW() WHERE id = $2`,

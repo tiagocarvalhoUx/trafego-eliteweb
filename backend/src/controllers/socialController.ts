@@ -104,7 +104,7 @@ export const socialController = {
   // GET /api/social/tiktok/auth-url
   async getTikTokAuthUrl(req: AuthRequest, res: Response): Promise<void> {
     const state = Buffer.from(JSON.stringify({ userId: req.userId })).toString('base64');
-    const url = tiktokService.getAuthUrl(env.tiktok.clientKey, env.tiktok.redirectUri, state);
+    const url = tiktokService.getAuthUrl(env.tiktok.clientKey, env.tiktok.redirectUri, state, env.tiktok.directPublish);
     res.json({ success: true, data: { url } });
   },
 

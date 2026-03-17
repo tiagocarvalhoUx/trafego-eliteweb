@@ -25,6 +25,7 @@ export const env = {
     clientKey: process.env.TIKTOK_CLIENT_KEY || '',
     clientSecret: process.env.TIKTOK_CLIENT_SECRET || '',
     redirectUri: process.env.TIKTOK_REDIRECT_URI || '',
+    directPublish: process.env.TIKTOK_DIRECT_PUBLISH === 'true',
   },
 
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
