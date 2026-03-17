@@ -16,8 +16,9 @@ router.delete('/:id', automationController.deleteAutomation);
 // Manual cycle trigger
 router.post('/run-cycle', automationController.runCycle);
 
-// Debug endpoint
+// Debug endpoints
 router.get('/debug-comments', automationController.debugComments);
+router.post('/debug-cycle', automationController.debugCycle);
 
 // Goals
 router.get('/goals', automationController.getGoals);

@@ -258,6 +258,121 @@ export const automationController = {
     }
   },
 
+  // POST /api/automation/debug-cycle - Run cycle with full debug output
+  async debugCycle(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const logs: string[] = [];
+      const log = (msg: string) => { logs.push(msg); console.log(msg); };
+
+      // 1. Check active automations
+      const { rows: automacoes } = await pool.query(
+        `SELECT a.id, a.nome, a.tipo, a.palavra_chave, a.mensagem_resposta, a.ativo, a.conta_id
+         FROM automacoes a
+         INNER JOIN contas_sociais cs ON cs.id = a.conta_id
+         WHERE cs.usuario_id = $1`,
+        [req.userId]
+      );
+      log(`Found ${automacoes.length} automations for user`);
+      for (const a of automacoes) {
+        log(`  - "${a.nome}" tipo=${a.tipo} keyword="${a.palavra_chave}" ativo=${a.ativo} conta_id=${a.conta_id}`);
+      }
+
+      const activeAutos = automacoes.filter((a: any) => a.ativo && a.tipo === 'comentario_keyword');
+      if (activeAutos.length === 0) {
+        res.json({ success: false, message: 'Nenhuma automacao ativa do tipo comentario_keyword', logs });
+        return;
+      }
+
+      // 2. Get account info
+      const { rows: contas } = await pool.query(
+        `SELECT id, access_token, conta_id_plataforma FROM contas_sociais
+         WHERE usuario_id = $1 AND ativo = true AND plataforma = 'instagram' LIMIT 1`,
+        [req.userId]
+      );
+      if (contas.length === 0) {
+        res.json({ success: false, message: 'Nenhuma conta Instagram ativa', logs });
+        return;
+      }
+      const conta = contas[0];
+      log(`Instagram account: id=${conta.id}, ig_user=${conta.conta_id_plataforma}`);
+
+      // 3. Sync posts
+      log(`Syncing Instagram posts...`);
+      try {
+        await analyticsService.collectInstagramData(conta.id, conta.access_token);
+        log(`Sync complete`);
+      } catch (e: any) {
+        log(`Sync error: ${e.message}`);
+      }
+
+      // 4. Check posts in DB
+      const { rows: posts } = await pool.query(
+        `SELECT id, id_post_plataforma, data_postagem FROM posts
+         WHERE conta_id = $1 AND data_postagem >= NOW() - INTERVAL '30 days'
+         ORDER BY data_postagem DESC`,
+        [conta.id]
+      );
+      log(`Posts in DB (last 30 days): ${posts.length}`);
+
+      const { rows: allPosts } = await pool.query(
+        'SELECT COUNT(*) as total FROM posts WHERE conta_id = $1',
+        [conta.id]
+      );
+      log(`Total posts in DB: ${allPosts[0].total}`);
+
+      // 5. Process each post
+      let leadsCreated = 0;
+      for (const post of posts) {
+        const comments = await instagramService.getComments(post.id_post_plataforma, conta.access_token);
+        if (comments.length > 0) {
+          log(`Post ${post.id_post_plataforma} (db_id=${post.id}): ${comments.length} comments`);
+        }
+
+        for (const comment of comments) {
+          for (const automacao of activeAutos) {
+            const keyword = automacao.palavra_chave?.toLowerCase();
+            const commentText = comment.text?.toLowerCase();
+            if (keyword && commentText?.includes(keyword)) {
+              log(`  MATCH! @${comment.username} said "${comment.text}" matches keyword "${automacao.palavra_chave}"`);
+
+              const existing = await pool.query(
+                'SELECT id FROM leads WHERE usuario_plataforma = $1 AND post_id = $2 AND palavra_chave = $3',
+                [comment.username, post.id, automacao.palavra_chave]
+              );
+              if (existing.rows.length > 0) {
+                log(`  Already processed, skipping`);
+                continue;
+              }
+
+              await pool.query(
+                `INSERT INTO leads (usuario_id, usuario_plataforma, plataforma, origem, post_id, palavra_chave, mensagem_enviada)
+                 VALUES ($1, $2, 'instagram', $3, $4, $5, $6)`,
+                [req.userId, comment.username, `Comentou "${automacao.palavra_chave}" no post`, post.id, automacao.palavra_chave, automacao.mensagem_resposta]
+              );
+              leadsCreated++;
+              log(`  Lead created for @${comment.username}!`);
+
+              if (automacao.mensagem_resposta && comment.from?.id) {
+                try {
+                  await instagramService.sendDirectMessage(conta.conta_id_plataforma, comment.from.id, automacao.mensagem_resposta, conta.access_token);
+                  log(`  DM sent to @${comment.username}`);
+                } catch (e: any) {
+                  log(`  DM failed: ${e.response?.data?.error?.message || e.message}`);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      log(`Done! Leads created: ${leadsCreated}`);
+      res.json({ success: true, leads_created: leadsCreated, logs });
+    } catch (error: any) {
+      console.error('Debug cycle error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   // PUT /api/automation/notifications/:id/read
   async markNotificationRead(req: AuthRequest, res: Response): Promise<void> {
     try {
