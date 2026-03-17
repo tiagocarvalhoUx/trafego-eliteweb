@@ -120,14 +120,21 @@ export const automationService = {
 
     for (const conta of contas) {
       if (conta.plataforma === 'instagram') {
-        // Get recent posts for this account
+        // Get recent posts for this account (last 30 days)
         const { rows: posts } = await pool.query(
-          `SELECT id, id_post_plataforma FROM posts
+          `SELECT id, id_post_plataforma, data_postagem FROM posts
            WHERE conta_id = $1
-             AND data_postagem >= NOW() - INTERVAL '7 days'`,
+             AND data_postagem >= NOW() - INTERVAL '30 days'`,
           [conta.id]
         );
-        console.log(`[Automation] Account ${conta.id} has ${posts.length} posts in last 7 days`);
+        console.log(`[Automation] Account ${conta.id} has ${posts.length} posts in last 30 days`);
+
+        // Also log total posts for debugging
+        const { rows: totalPosts } = await pool.query(
+          'SELECT COUNT(*) as total FROM posts WHERE conta_id = $1',
+          [conta.id]
+        );
+        console.log(`[Automation] Account ${conta.id} total posts in DB: ${totalPosts[0].total}`);
 
         for (const post of posts) {
           try {
