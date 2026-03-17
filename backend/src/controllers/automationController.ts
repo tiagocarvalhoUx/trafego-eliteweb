@@ -215,11 +215,24 @@ export const automationController = {
 
       const { access_token } = contas[0];
 
-      // Get recent media with comments_count
-      const media = await instagramService.getMedia(access_token, 5);
+      // Check token permissions
+      let permissions: any = null;
+      try {
+        const axios = (await import('axios')).default;
+        const { data: permData } = await axios.get('https://graph.instagram.com/me', {
+          params: { fields: 'id,username', access_token },
+        });
+        permissions = permData;
+      } catch (e: any) {
+        permissions = { error: e.response?.data || e.message };
+      }
+
+      // Get ALL recent media with comments_count
+      const media = await instagramService.getMedia(access_token, 25);
       const results: any[] = [];
 
-      for (const m of media.slice(0, 3)) {
+      // Check ALL posts for comments
+      for (const m of media) {
         const comments = await instagramService.getComments(m.id, access_token);
         results.push({
           post_id: m.id,
@@ -230,7 +243,15 @@ export const automationController = {
         });
       }
 
-      res.json({ success: true, account_id: contas[0].id, ig_user_id: contas[0].conta_id_plataforma, posts: results });
+      res.json({
+        success: true,
+        account_id: contas[0].id,
+        ig_user_id: contas[0].conta_id_plataforma,
+        token_check: permissions,
+        total_posts: media.length,
+        posts_with_comments: results.filter(r => r.comments_count_from_api > 0 || r.comments_fetched > 0).length,
+        posts: results,
+      });
     } catch (error: any) {
       console.error('Debug comments error:', error.response?.data || error.message);
       res.status(500).json({ error: error.response?.data || error.message });
