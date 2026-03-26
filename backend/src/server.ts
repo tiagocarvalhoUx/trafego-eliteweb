@@ -60,9 +60,15 @@ app.use('/api/leads', leadsRoutes);
 app.use('/api/automation', automationRoutes);
 app.use('/api/video', videoRoutes);
 
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check (also pings DB to keep Supabase alive)
+app.get('/health', async (_req, res) => {
+  try {
+    const pool = (await import('./config/database')).default;
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ status: 'degraded', db: 'disconnected', timestamp: new Date().toISOString() });
+  }
 });
 
 // 404 handler
