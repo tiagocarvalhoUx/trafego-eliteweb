@@ -7,6 +7,7 @@ import pool from '../config/database';
 import { env } from '../config/env';
 import { instagramService } from './instagramService';
 import { tiktokService } from './tiktokService';
+import fs from 'fs';
 
 export interface VideoPromptData {
   tema: string;
@@ -250,7 +251,8 @@ export const videoService = {
     await pool.query(`DELETE FROM video_jobs WHERE id=$1 AND usuario_id=$2`, [jobId, usuarioId]);
   },
 
-  async uploadAndSave(fileBuffer: Buffer, caption: string, usuarioId: number): Promise<number> {
+  async uploadAndSaveFromDisk(filePath: string, caption: string, usuarioId: number): Promise<number> {
+    const fileBuffer = fs.readFileSync(filePath);
     const videoUrl = await uploadToSupabase(fileBuffer, usuarioId);
     const safeCaption = caption.slice(0, 2200);
 
