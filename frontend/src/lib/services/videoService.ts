@@ -31,23 +31,31 @@ export const videoService = {
     await api.delete(`/video/${id}`);
   },
 
+  // Direct-to-Supabase upload: file never passes through the backend
   async uploadVideo(file: File, caption: string): Promise<{ jobId: number }> {
-    const formData = new FormData();
-    formData.append('video', file);
-    formData.append('caption', caption);
-    const token = localStorage.getItem('token');
-    // Upload directly to backend (bypass SvelteKit proxy to avoid arrayBuffer corruption)
-    const res = await fetch('https://trafego-eliteweb.onrender.com/api/video/upload', {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: formData,
+    // Step 1: get a signed upload URL from backend
+    const { data: initData } = await api.post('/video/upload/signed-url', {
+      filename: file.name,
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Erro ao enviar vídeo' }));
-      throw new Error(err.message || `Upload failed: ${res.status}`);
+    const { signedUrl, path } = initData.data as { signedUrl: string; path: string };
+
+    // Step 2: upload directly to Supabase (no backend involved)
+    const uploadRes = await fetch(signedUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type || 'video/mp4' },
+      body: file,
+    });
+    if (!uploadRes.ok) {
+      const text = await uploadRes.text().catch(() => '');
+      throw new Error(`Supabase upload failed (${uploadRes.status}): ${text}`);
     }
-    const data = await res.json();
-    return data.data;
+
+    // Step 3: tell backend to save to DB
+    const { data: completeData } = await api.post('/video/upload/complete', {
+      path,
+      caption,
+    });
+    return completeData.data;
   },
 
   async publishToInstagram(id: number, caption: string): Promise<void> {

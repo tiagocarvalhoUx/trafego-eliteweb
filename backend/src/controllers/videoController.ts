@@ -2,26 +2,12 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { videoService } from '../services/videoService';
 import multer from 'multer';
-import fs from 'fs';
-import path from 'path';
 
-// Write to /tmp (disk) instead of RAM to avoid OOM on Render free tier
-const diskStorage = multer.diskStorage({
-  destination: '/tmp',
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.mp4';
-    cb(null, `upload-${Date.now()}${ext}`);
-  },
-});
+export const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-export const upload = multer({
-  storage: diskStorage,
-  limits: { fileSize: 500 * 1024 * 1024 },
-});
-
-export function handleMulterError(err: any, req: AuthRequest, res: Response, next: NextFunction): void {
+export function handleMulterError(err: any, _req: AuthRequest, res: Response, next: NextFunction): void {
   if (err?.code === 'LIMIT_FILE_SIZE') {
-    res.status(413).json({ success: false, message: 'Vídeo muito grande. O limite é 500MB.' });
+    res.status(413).json({ success: false, message: 'Arquivo muito grande.' });
     return;
   }
   next(err);
@@ -45,14 +31,11 @@ export const videoController = {
         res.status(400).json({ success: false, message: 'O tema do vídeo é obrigatório' });
         return;
       }
-
       const jobId = await videoService.createJob(req.userId!, {
         tema, estilo, tom, publico, elementos, musica, cta, plataformas,
       });
-
       videoService.startGeneration(jobId, { tema, estilo, tom, publico, elementos, musica, cta, plataformas }, req.userId!)
         .catch(console.error);
-
       res.status(201).json({
         success: true,
         message: 'Geração de vídeo iniciada! Aguarde alguns minutos.',
@@ -61,6 +44,38 @@ export const videoController = {
     } catch (error) {
       console.error('Create video job error:', error);
       res.status(500).json({ success: false, message: 'Erro ao iniciar geração de vídeo' });
+    }
+  },
+
+  // Step 1: return a Supabase signed upload URL — no file touches the backend
+  async getSignedUploadUrl(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { filename } = req.body;
+      if (!filename) {
+        res.status(400).json({ success: false, message: 'filename obrigatório' });
+        return;
+      }
+      const result = await videoService.createSignedUploadUrl(req.userId!, filename);
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      console.error('Signed URL error:', error);
+      res.status(500).json({ success: false, message: error?.message || 'Erro ao gerar URL de upload' });
+    }
+  },
+
+  // Step 2: browser finished uploading to Supabase, save job to DB
+  async completeUpload(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { path: storagePath, caption } = req.body;
+      if (!storagePath) {
+        res.status(400).json({ success: false, message: 'path obrigatório' });
+        return;
+      }
+      const jobId = await videoService.saveUploadedVideo(storagePath, caption || '', req.userId!);
+      res.status(201).json({ success: true, message: 'Vídeo salvo com sucesso!', data: { jobId } });
+    } catch (error: any) {
+      console.error('Complete upload error:', error);
+      res.status(500).json({ success: false, message: error?.message || 'Erro ao salvar vídeo' });
     }
   },
 
@@ -85,25 +100,6 @@ export const videoController = {
     } catch (error) {
       console.error('Delete video job error:', error);
       res.status(500).json({ success: false, message: 'Erro ao remover vídeo' });
-    }
-  },
-
-  async uploadVideo(req: AuthRequest, res: Response): Promise<void> {
-    const filePath = (req.file as Express.Multer.File & { path: string })?.path;
-    try {
-      if (!req.file || !filePath) {
-        res.status(400).json({ success: false, message: 'Nenhum vídeo enviado' });
-        return;
-      }
-      const caption = (req.body.caption as string) || '';
-      const jobId = await videoService.uploadAndSaveFromDisk(filePath, caption, req.userId!);
-      res.status(201).json({ success: true, message: 'Vídeo enviado com sucesso!', data: { jobId } });
-    } catch (error: any) {
-      console.error('Upload video error:', error);
-      res.status(500).json({ success: false, message: error?.message || 'Erro ao enviar vídeo' });
-    } finally {
-      // Always clean up temp file
-      if (filePath) fs.unlink(filePath, () => {});
     }
   },
 

@@ -251,9 +251,39 @@ export const videoService = {
     await pool.query(`DELETE FROM video_jobs WHERE id=$1 AND usuario_id=$2`, [jobId, usuarioId]);
   },
 
-  async uploadAndSaveFromDisk(filePath: string, caption: string, usuarioId: number): Promise<number> {
-    const fileBuffer = fs.readFileSync(filePath);
-    const videoUrl = await uploadToSupabase(fileBuffer, usuarioId);
+  // Generate a Supabase signed upload URL — browser uploads directly, no file touches backend
+  async createSignedUploadUrl(usuarioId: number, filename: string): Promise<{ signedUrl: string; path: string; token: string }> {
+    if (!env.supabase.url || !env.supabase.serviceRoleKey) {
+      throw new Error('Supabase não configurado');
+    }
+    const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
+
+    // Ensure bucket exists
+    const { data: buckets } = await supabase.storage.listBuckets();
+    if (!buckets?.some((b) => b.name === 'videos')) {
+      await supabase.storage.createBucket('videos', { public: true });
+    }
+
+    const ext = filename.split('.').pop() || 'mp4';
+    const storagePath = `${usuarioId}/${Date.now()}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from('videos')
+      .createSignedUploadUrl(storagePath);
+
+    if (error || !data) throw new Error(`Supabase signed URL error: ${error?.message}`);
+
+    return { signedUrl: data.signedUrl, path: storagePath, token: data.token };
+  },
+
+  // Called after browser finishes direct upload to Supabase
+  async saveUploadedVideo(storagePath: string, caption: string, usuarioId: number): Promise<number> {
+    if (!env.supabase.url || !env.supabase.serviceRoleKey) {
+      throw new Error('Supabase não configurado');
+    }
+    const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
+    const { data: urlData } = supabase.storage.from('videos').getPublicUrl(storagePath);
+    const videoUrl = urlData.publicUrl;
     const safeCaption = caption.slice(0, 2200);
 
     const { rows } = await pool.query(
