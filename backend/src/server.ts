@@ -20,15 +20,24 @@ const app = express();
 // Trust proxy (required for Render, Heroku, etc.)
 app.set('trust proxy', 1);
 
-// Security middleware
-app.use(helmet());
-
-// CORS
+// CORS must come before helmet
 app.use(cors({
-  origin: true,
+  origin: [
+    'https://trafego-eliteweb.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:4173',
+  ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Handle preflight for all routes
+app.options('*', cors());
+
+// Security middleware (after CORS so it doesn't override CORP headers)
+app.use(helmet({
+  crossOriginResourcePolicy: false,
 }));
 
 // Rate limiting
