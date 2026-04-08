@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { authService } from '$lib/services/authService';
   import { toast } from '$lib/stores/notifications';
+  import AppLogo from '$lib/components/AppLogo.svelte';
 
   let email = '';
   let senha = '';
@@ -28,8 +29,8 @@
   <div class="w-full max-w-md">
     <!-- Logo -->
     <div class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-purple-600 rounded-2xl text-3xl mb-4">
-        🚀
+      <div class="mb-4 flex justify-center">
+        <AppLogo size="lg" />
       </div>
       <h1 class="text-2xl font-bold text-white">Social Analytics</h1>
       <p class="text-gray-400 mt-1 text-sm">Plataforma de automação e analytics</p>
@@ -71,7 +72,7 @@
 
       <p class="text-center text-gray-400 text-sm mt-4">
         Não tem conta?
-        <a href="/register" class="text-primary-400 hover:text-primary-300 font-medium">Cadastre-se</a>
+        <a href="/register" class="text-emerald-400 hover:text-emerald-300 font-medium">Cadastre-se</a>
       </p>
     </div>
   </div>

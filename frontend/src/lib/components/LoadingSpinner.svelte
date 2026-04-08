@@ -10,6 +10,6 @@
 
 <div class="flex items-center justify-center">
   <div
-    class="{sizeMap[size]} border-gray-700 border-t-primary-500 rounded-full animate-spin"
+    class="{sizeMap[size]} border-gray-700 border-t-emerald-500 rounded-full animate-spin"
   ></div>
 </div>

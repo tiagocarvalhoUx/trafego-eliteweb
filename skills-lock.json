@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "ai-video-generation": {
+      "source": "inferen-sh/skills",
+      "sourceType": "github",
+      "computedHash": "0d7dd7d50ad347bba7a1a157e511b8cac21defa53282570d68d4794b2fbca115"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "computedHash": "642a177bee320618caa49f5106cadb4e7594c606e867f61ba7b56d19cf745cd5"
+    }
+  }
+}

@@ -124,7 +124,7 @@
   <div class="card">
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-base font-semibold text-white">Top Posts por Engajamento</h3>
-      <a href="/analytics" class="text-sm text-primary-400 hover:text-primary-300">Ver todos →</a>
+      <a href="/analytics" class="text-sm text-emerald-400 hover:text-emerald-300">Ver todos →</a>
     </div>
 
     {#if topPosts.length === 0}

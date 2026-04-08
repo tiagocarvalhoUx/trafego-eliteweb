@@ -288,7 +288,7 @@
 
     <!-- Create Form -->
     {#if showCreateForm}
-      <div class="card mb-4 border-primary-500/30">
+      <div class="card mb-4 border-emerald-500/30">
         <h3 class="text-base font-semibold text-white mb-4">Nova Automação</h3>
         <form on:submit|preventDefault={handleCreateAutomation} class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -726,7 +726,7 @@
             <div class="mb-2">
               <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
                 <div
-                  class="h-full rounded-full transition-all duration-500 {goal.concluida ? 'bg-green-500' : 'bg-primary-500'}"
+                  class="h-full rounded-full transition-all duration-500 {goal.concluida ? 'bg-green-500' : 'bg-emerald-500'}"
                   style="width: {progress}%"
                 ></div>
               </div>

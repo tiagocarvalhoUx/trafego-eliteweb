@@ -3,6 +3,7 @@
   import { authService } from '$lib/services/authService';
   import { authStore } from '$lib/stores/auth';
   import { createEventDispatcher } from 'svelte';
+  import AppLogo from '$lib/components/AppLogo.svelte';
 
   export let open = false;
 
@@ -40,9 +41,7 @@
   <!-- Logo -->
   <div class="p-5 border-b border-gray-800 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="w-9 h-9 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center text-lg">
-        🚀
-      </div>
+      <AppLogo size="sm" />
       <div>
         <h1 class="font-bold text-white text-sm">Social Analytics</h1>
         <p class="text-gray-500 text-xs">EliteWeb Platform</p>
@@ -63,7 +62,7 @@
         on:click={close}
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150
           {currentPath === item.href
-            ? 'bg-primary-600 text-white'
+            ? 'bg-emerald-600 text-white'
             : 'text-gray-400 hover:text-white hover:bg-gray-800'}"
       >
         <span class="text-lg">{item.icon}</span>
@@ -75,7 +74,7 @@
   <!-- User section -->
   <div class="p-4 border-t border-gray-800">
     <div class="flex items-center gap-3 mb-3">
-      <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-sm font-bold shrink-0">
+      <div class="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center text-sm font-bold shrink-0">
         {($authStore.user?.nome?.[0] ?? 'U').toUpperCase()}
       </div>
       <div class="flex-1 min-w-0">

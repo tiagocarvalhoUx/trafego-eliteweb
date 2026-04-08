@@ -43,7 +43,7 @@
 
     <section>
       <h2 class="text-lg font-semibold text-white mb-2">6. Contact</h2>
-      <p>For questions about this privacy policy, contact: <a href="mailto:elitewebdesigner@outlook.com" class="text-primary-400 hover:text-primary-300">elitewebdesigner@outlook.com</a></p>
+      <p>For questions about this privacy policy, contact: <a href="mailto:elitewebdesigner@outlook.com" class="text-emerald-400 hover:text-emerald-300">elitewebdesigner@outlook.com</a></p>
     </section>
   </div>
 </div>

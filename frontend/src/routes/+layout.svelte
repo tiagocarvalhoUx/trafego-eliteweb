@@ -8,6 +8,7 @@
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+  import AppLogo from '$lib/components/AppLogo.svelte';
 
   const publicRoutes = ['/login', '/register', '/privacy'];
   $: isPublicRoute = publicRoutes.includes($page.url.pathname);
@@ -56,9 +57,7 @@
         </svg>
       </button>
       <div class="flex items-center gap-2">
-        <div class="w-7 h-7 bg-gradient-to-br from-primary-500 to-purple-600 rounded-md flex items-center justify-center text-sm">
-          🚀
-        </div>
+        <AppLogo size="xs" />
         <span class="font-bold text-white text-sm">Social Analytics</span>
       </div>
     </header>
