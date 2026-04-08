@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware';
-import { videoController, upload } from '../controllers/videoController';
+import { videoController, upload, handleMulterError } from '../controllers/videoController';
 
 const router = Router();
 
@@ -13,5 +13,8 @@ router.post('/:id/publish/instagram', videoController.publishToInstagram);
 router.post('/:id/publish/tiktok', videoController.publishToTikTok);
 router.get('/:id', videoController.getJob);
 router.delete('/:id', videoController.deleteJob);
+
+// Must be after all routes to catch multer errors
+router.use(handleMulterError);
 
 export default router;

@@ -112,11 +112,28 @@ async function generateWithPixverse(prompt: string): Promise<string> {
 
 async function uploadToSupabase(data: Buffer, userId: number): Promise<string> {
   if (!env.supabase.url || !env.supabase.serviceRoleKey) {
-    throw new Error('Supabase not configured');
+    throw new Error('Supabase não configurado (SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY ausente)');
   }
 
   const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
   const filename = `${userId}/${Date.now()}.mp4`;
+
+  console.log(`[Supabase] Uploading ${filename} (${(data.length / 1024 / 1024).toFixed(2)} MB)...`);
+
+  // Check if bucket exists, create if not
+  const { data: buckets, error: listErr } = await supabase.storage.listBuckets();
+  if (listErr) {
+    console.error('[Supabase] Failed to list buckets:', listErr.message);
+    throw new Error(`Supabase auth error: ${listErr.message}`);
+  }
+
+  const bucketExists = buckets?.some((b) => b.name === 'videos');
+  if (!bucketExists) {
+    console.log('[Supabase] Bucket "videos" not found, creating...');
+    const { error: createErr } = await supabase.storage.createBucket('videos', { public: true });
+    if (createErr) throw new Error(`Supabase: failed to create bucket: ${createErr.message}`);
+    console.log('[Supabase] Bucket "videos" created.');
+  }
 
   const { error } = await supabase.storage
     .from('videos')
@@ -125,6 +142,7 @@ async function uploadToSupabase(data: Buffer, userId: number): Promise<string> {
   if (error) throw new Error(`Supabase upload error: ${error.message}`);
 
   const { data: urlData } = supabase.storage.from('videos').getPublicUrl(filename);
+  console.log(`[Supabase] Upload OK: ${urlData.publicUrl}`);
   return urlData.publicUrl;
 }
 

@@ -1,9 +1,17 @@
-import { Response } from 'express';
+import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { videoService } from '../services/videoService';
 import multer from 'multer';
 
-export const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+export const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+
+export function handleMulterError(err: any, req: AuthRequest, res: Response, next: NextFunction): void {
+  if (err?.code === 'LIMIT_FILE_SIZE') {
+    res.status(413).json({ success: false, message: 'Vídeo muito grande. O limite é 500MB.' });
+    return;
+  }
+  next(err);
+}
 
 export const videoController = {
   async listJobs(req: AuthRequest, res: Response): Promise<void> {
