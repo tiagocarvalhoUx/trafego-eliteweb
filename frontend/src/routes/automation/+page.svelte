@@ -136,10 +136,18 @@
     }
   }
 
+  const MAX_FILE_MB = 45;
+
   function handleFileSelect(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    const sizeMB = file.size / 1024 / 1024;
+    if (sizeMB > MAX_FILE_MB) {
+      toast.error(`Vídeo muito grande (${sizeMB.toFixed(1)} MB). Limite: ${MAX_FILE_MB} MB. Comprima o vídeo antes de enviar.`);
+      input.value = '';
+      return;
+    }
     uploadData.file = file;
     if (uploadData.preview) URL.revokeObjectURL(uploadData.preview);
     uploadData.preview = URL.createObjectURL(file);
@@ -617,7 +625,7 @@
                 <p class="text-gray-500 text-xs mt-1">{(uploadData.file.size / 1024 / 1024).toFixed(1)} MB</p>
               {:else}
                 <p class="text-gray-400 text-sm">Clique para selecionar ou arraste o video</p>
-                <p class="text-gray-600 text-xs mt-1">MP4, MOV (max 100MB)</p>
+                <p class="text-gray-600 text-xs mt-1">MP4, MOV (max 45MB)</p>
               {/if}
               <input type="file" accept="video/mp4,video/quicktime,video/*" class="hidden" on:change={handleFileSelect} />
             </label>

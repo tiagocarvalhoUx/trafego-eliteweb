@@ -258,10 +258,20 @@ export const videoService = {
     }
     const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
 
-    // Always try to create bucket (ignore "already exists" error)
-    const { error: bucketErr } = await supabase.storage.createBucket('videos', { public: true, allowedMimeTypes: ['video/*'] });
+    // Always try to create bucket with 50MB limit (ignore "already exists" error)
+    const { error: bucketErr } = await supabase.storage.createBucket('videos', {
+      public: true,
+      allowedMimeTypes: ['video/*'],
+      fileSizeLimit: 50 * 1024 * 1024,
+    });
     if (bucketErr && !bucketErr.message.includes('already exists') && !bucketErr.message.includes('duplicate')) {
       console.warn('[Supabase] Bucket create warning:', bucketErr.message);
+      // Try to update existing bucket limits
+      await supabase.storage.updateBucket('videos', {
+        public: true,
+        allowedMimeTypes: ['video/*'],
+        fileSizeLimit: 50 * 1024 * 1024,
+      });
     }
 
     const ext = (filename.split('.').pop() || 'mp4').toLowerCase();
