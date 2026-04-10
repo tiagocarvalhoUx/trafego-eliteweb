@@ -152,7 +152,41 @@
     }
     uploadingVideo = true;
     try {
-      await videoService.uploadVideo(uploadData.file, uploadData.caption);
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const backendUrl = 'https://trafego-eliteweb.onrender.com';
+
+      // Step 1: get signed upload URL
+      const signRes = await fetch(`${backendUrl}/api/video/upload/signed-url`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ filename: uploadData.file.name }),
+      });
+      if (!signRes.ok) {
+        const e = await signRes.json().catch(() => ({}));
+        throw new Error(e.message || `Erro ao obter URL (${signRes.status})`);
+      }
+      const { data: signData } = await signRes.json();
+
+      // Step 2: upload directly to Supabase
+      const putRes = await fetch(signData.signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': uploadData.file.type || 'video/mp4' },
+        body: uploadData.file,
+      });
+      if (!putRes.ok) throw new Error(`Supabase upload falhou (${putRes.status})`);
+
+      // Step 3: save to DB
+      const completeRes = await fetch(`${backendUrl}/api/video/upload/complete`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ path: signData.path, caption: uploadData.caption }),
+      });
+      if (!completeRes.ok) {
+        const e = await completeRes.json().catch(() => ({}));
+        throw new Error(e.message || `Erro ao finalizar upload (${completeRes.status})`);
+      }
+
       videoJobs = await videoService.listJobs();
       showUploadForm = false;
       if (uploadData.preview) URL.revokeObjectURL(uploadData.preview);
