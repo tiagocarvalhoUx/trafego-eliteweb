@@ -30,6 +30,8 @@
   let publishCaption = '';
   let publishJobId: number | null = null;
   let publishPlatform: 'instagram' | 'tiktok' = 'instagram';
+  let publishSuccess = false;
+  let publishSuccessPlatform = '';
 
   let newVideo = {
     tema: '',
@@ -231,9 +233,11 @@
         await videoService.publishToTikTok(publishJobId, publishCaption);
       }
       videoJobs = await videoService.listJobs();
+      publishSuccessPlatform = publishPlatform === 'instagram' ? 'Instagram' : 'TikTok';
       publishJobId = null;
       publishCaption = '';
-      toast.success(`Publicado no ${publishPlatform === 'instagram' ? 'Instagram' : 'TikTok'} com sucesso!`);
+      publishSuccess = true;
+      setTimeout(() => { publishSuccess = false; }, 3000);
     } catch (err: any) {
       toast.error(err.response?.data?.message ?? err?.message ?? 'Erro ao publicar');
     } finally {
@@ -660,6 +664,21 @@
       </div>
     {/if}
   </div>
+
+  <!-- Publish Success Screen -->
+  {#if publishSuccess}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div class="flex flex-col items-center gap-4 text-center animate-in fade-in zoom-in duration-300">
+        <div class="w-24 h-24 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center">
+          <svg class="w-12 h-12 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <p class="text-white text-2xl font-bold">Publicado!</p>
+        <p class="text-gray-400 text-sm">Seu vídeo foi enviado para o {publishSuccessPlatform} com sucesso.</p>
+      </div>
+    </div>
+  {/if}
 
   <!-- Publish Modal -->
   {#if publishJobId}
