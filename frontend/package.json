@@ -21,7 +21,7 @@
     "embla-carousel-svelte": "^8.6.0",
     "formsnap": "^1.0.1",
     "lucide-svelte": "^1.0.1",
-    "mode-watcher": "^1.1.0",
+    "mode-watcher": "^0.4.1",
     "paneforge": "^1.0.2",
     "postcss": "^8.4.32",
     "shadcn-svelte": "^0.14.3",
