@@ -107,11 +107,11 @@ export const videoController = {
     try {
       const jobId = parseInt(req.params.id);
       const caption = (req.body.caption as string) || '';
+      // Respond immediately, publish runs in background (Instagram API can take 60-120s)
+      res.json({ success: true, message: 'Publicação iniciada! O vídeo aparecerá no Instagram em instantes.' });
       await videoService.publishToInstagram(jobId, req.userId!, caption);
-      res.json({ success: true, message: 'Publicado no Instagram com sucesso!' });
     } catch (error: any) {
       console.error('Publish to Instagram error:', error?.response?.data || error);
-      res.status(500).json({ success: false, message: error?.message || 'Erro ao publicar no Instagram' });
     }
   },
 
@@ -119,11 +119,11 @@ export const videoController = {
     try {
       const jobId = parseInt(req.params.id);
       const caption = (req.body.caption as string) || '';
+      // Respond immediately, publish runs in background
+      res.json({ success: true, message: 'Publicação iniciada! O vídeo aparecerá no TikTok em instantes.' });
       await videoService.publishToTikTok(jobId, req.userId!, caption);
-      res.json({ success: true, message: 'Publicado no TikTok com sucesso!' });
     } catch (error: any) {
       console.error('Publish to TikTok error:', error?.response?.data || error);
-      res.status(500).json({ success: false, message: error?.message || 'Erro ao publicar no TikTok' });
     }
   },
 };

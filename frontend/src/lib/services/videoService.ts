@@ -59,10 +59,10 @@ export const videoService = {
   },
 
   async publishToInstagram(id: number, caption: string): Promise<void> {
-    await api.post(`/video/${id}/publish/instagram`, { caption });
+    await api.post(`/video/${id}/publish/instagram`, { caption }, { timeout: 120000 });
   },
 
   async publishToTikTok(id: number, caption: string): Promise<void> {
-    await api.post(`/video/${id}/publish/tiktok`, { caption });
+    await api.post(`/video/${id}/publish/tiktok`, { caption }, { timeout: 120000 });
   },
 };
