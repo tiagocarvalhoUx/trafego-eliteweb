@@ -32,6 +32,7 @@
   let publishPlatform: 'instagram' | 'tiktok' = 'instagram';
   let publishSuccess = false;
   let publishSuccessPlatform = '';
+  let publishError = '';
   let uploadSuccess = false;
 
   let newVideo = {
@@ -228,6 +229,7 @@
   async function handlePublish() {
     if (!publishJobId) return;
     publishingId = publishJobId;
+    publishError = '';
     try {
       if (publishPlatform === 'instagram') {
         await videoService.publishToInstagram(publishJobId, publishCaption);
@@ -236,12 +238,15 @@
       }
       videoJobs = await videoService.listJobs();
       publishSuccessPlatform = publishPlatform === 'instagram' ? 'Instagram' : 'TikTok';
-      publishJobId = null;
-      publishCaption = '';
       publishSuccess = true;
-      setTimeout(() => { publishSuccess = false; }, 3000);
+      // Close modal after 2.5s showing success inside it
+      setTimeout(() => {
+        publishSuccess = false;
+        publishJobId = null;
+        publishCaption = '';
+      }, 2500);
     } catch (err: any) {
-      toast.error(err.response?.data?.message ?? err?.message ?? 'Erro ao publicar');
+      publishError = err.response?.data?.message ?? err?.message ?? 'Erro ao publicar';
     } finally {
       publishingId = null;
     }
@@ -699,27 +704,50 @@
 
   <!-- Publish Modal -->
   {#if publishJobId}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" on:click|self={() => { publishJobId = null; }} on:keydown={(e) => { if (e.key === 'Escape') publishJobId = null; }}>
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" on:click|self={() => { if (!publishingId) { publishJobId = null; publishError = ''; publishSuccess = false; } }} on:keydown={(e) => { if (e.key === 'Escape' && !publishingId) { publishJobId = null; publishError = ''; publishSuccess = false; } }}>
       <div class="card w-full max-w-lg mx-4 border-purple-500/30">
-        <h3 class="text-base font-semibold text-white mb-4">
-          Publicar no {publishPlatform === 'instagram' ? 'Instagram' : 'TikTok'}
-        </h3>
-        <div>
-          <label class="block text-sm text-gray-300 mb-1.5">Texto do post</label>
-          <textarea
-            bind:value={publishCaption}
-            class="input resize-none"
-            rows="4"
-            placeholder="Escreva o texto do post com hashtags..."
-          ></textarea>
-          <p class="text-gray-600 text-xs mt-1">{publishCaption.length}/{publishPlatform === 'tiktok' ? '150' : '2200'} caracteres</p>
-        </div>
-        <div class="flex gap-3 mt-4">
-          <button on:click={handlePublish} disabled={publishingId !== null} class="btn-primary">
-            {publishingId ? 'Publicando...' : `Publicar no ${publishPlatform === 'instagram' ? 'Instagram' : 'TikTok'}`}
-          </button>
-          <button on:click={() => { publishJobId = null; }} class="btn-secondary">Cancelar</button>
-        </div>
+
+        {#if publishSuccess}
+          <!-- Success state inside modal -->
+          <div class="flex flex-col items-center gap-3 py-6 text-center">
+            <div class="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center">
+              <svg class="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p class="text-white text-xl font-bold">Publicado!</p>
+            <p class="text-gray-400 text-sm">Vídeo enviado para o {publishSuccessPlatform} com sucesso.</p>
+          </div>
+
+        {:else}
+          <h3 class="text-base font-semibold text-white mb-4">
+            Publicar no {publishPlatform === 'instagram' ? 'Instagram' : 'TikTok'}
+          </h3>
+
+          {#if publishError}
+            <div class="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+              ✕ {publishError}
+            </div>
+          {/if}
+
+          <div>
+            <label class="block text-sm text-gray-300 mb-1.5">Texto do post</label>
+            <textarea
+              bind:value={publishCaption}
+              class="input resize-none"
+              rows="4"
+              placeholder="Escreva o texto do post com hashtags..."
+            ></textarea>
+            <p class="text-gray-600 text-xs mt-1">{publishCaption.length}/{publishPlatform === 'tiktok' ? '150' : '2200'} caracteres</p>
+          </div>
+          <div class="flex gap-3 mt-4">
+            <button on:click={handlePublish} disabled={publishingId !== null} class="btn-primary">
+              {publishingId ? 'Publicando...' : `Publicar no ${publishPlatform === 'instagram' ? 'Instagram' : 'TikTok'}`}
+            </button>
+            <button on:click={() => { publishJobId = null; publishError = ''; }} class="btn-secondary">Cancelar</button>
+          </div>
+        {/if}
+
       </div>
     </div>
   {/if}
