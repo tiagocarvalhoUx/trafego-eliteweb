@@ -258,21 +258,27 @@ export const videoService = {
     }
     const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey);
 
-    // Ensure bucket exists
-    const { data: buckets } = await supabase.storage.listBuckets();
-    if (!buckets?.some((b) => b.name === 'videos')) {
-      await supabase.storage.createBucket('videos', { public: true });
+    // Always try to create bucket (ignore "already exists" error)
+    const { error: bucketErr } = await supabase.storage.createBucket('videos', { public: true, allowedMimeTypes: ['video/*'] });
+    if (bucketErr && !bucketErr.message.includes('already exists') && !bucketErr.message.includes('duplicate')) {
+      console.warn('[Supabase] Bucket create warning:', bucketErr.message);
     }
 
-    const ext = filename.split('.').pop() || 'mp4';
+    const ext = (filename.split('.').pop() || 'mp4').toLowerCase();
     const storagePath = `${usuarioId}/${Date.now()}.${ext}`;
+
+    console.log(`[Supabase] Creating signed upload URL for: ${storagePath}`);
 
     const { data, error } = await supabase.storage
       .from('videos')
-      .createSignedUploadUrl(storagePath);
+      .createSignedUploadUrl(storagePath, { upsert: true });
 
-    if (error || !data) throw new Error(`Supabase signed URL error: ${error?.message}`);
+    if (error || !data) {
+      console.error('[Supabase] createSignedUploadUrl error:', error);
+      throw new Error(`Supabase signed URL error: ${error?.message}`);
+    }
 
+    console.log(`[Supabase] Signed URL created successfully`);
     return { signedUrl: data.signedUrl, path: storagePath, token: data.token };
   },
 

@@ -169,12 +169,20 @@
       const { data: signData } = await signRes.json();
 
       // Step 2: upload directly to Supabase
+      const contentType = uploadData.file.type || 'video/mp4';
       const putRes = await fetch(signData.signedUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': uploadData.file.type || 'video/mp4' },
+        headers: {
+          'Content-Type': contentType,
+          'x-upsert': 'true',
+        },
         body: uploadData.file,
       });
-      if (!putRes.ok) throw new Error(`Supabase upload falhou (${putRes.status})`);
+      if (!putRes.ok) {
+        const body = await putRes.text().catch(() => '');
+        console.error('[Upload] Supabase PUT failed:', putRes.status, body);
+        throw new Error(`Supabase upload falhou (${putRes.status}): ${body.slice(0, 300)}`);
+      }
 
       // Step 3: save to DB
       const completeRes = await fetch(`${backendUrl}/api/video/upload/complete`, {
