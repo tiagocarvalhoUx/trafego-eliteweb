@@ -32,6 +32,7 @@
   let publishPlatform: 'instagram' | 'tiktok' = 'instagram';
   let publishSuccess = false;
   let publishSuccessPlatform = '';
+  let uploadSuccess = false;
 
   let newVideo = {
     tema: '',
@@ -209,7 +210,8 @@
       showUploadForm = false;
       if (uploadData.preview) URL.revokeObjectURL(uploadData.preview);
       uploadData = { file: null, caption: '', preview: '' };
-      toast.success('Vídeo enviado com sucesso!');
+      uploadSuccess = true;
+      setTimeout(() => { uploadSuccess = false; }, 3000);
     } catch (err: any) {
       toast.error(err?.message ?? 'Erro ao enviar vídeo');
     } finally {
@@ -664,6 +666,21 @@
       </div>
     {/if}
   </div>
+
+  <!-- Upload Success Screen -->
+  {#if uploadSuccess}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div class="flex flex-col items-center gap-4 text-center animate-in fade-in zoom-in duration-300">
+        <div class="w-24 h-24 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center">
+          <svg class="w-12 h-12 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <p class="text-white text-2xl font-bold">Enviado!</p>
+        <p class="text-gray-400 text-sm">Seu vídeo foi enviado com sucesso.</p>
+      </div>
+    </div>
+  {/if}
 
   <!-- Publish Success Screen -->
   {#if publishSuccess}
