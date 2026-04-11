@@ -10,7 +10,7 @@
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import AppLogo from '$lib/components/AppLogo.svelte';
 
-  const publicRoutes = ['/login', '/register', '/privacy'];
+  const publicRoutes = ['/login', '/register', '/privacy', '/terms'];
   $: isPublicRoute = publicRoutes.includes($page.url.pathname);
 
   let sidebarOpen = false;
