@@ -9,5 +9,6 @@ router.post('/register', validate(schemas.register), authController.register);
 router.post('/login', validate(schemas.login), authController.login);
 router.get('/me', authMiddleware, authController.me);
 router.put('/profile', authMiddleware, authController.updateProfile);
+router.put('/change-password', authMiddleware, validate(schemas.changePassword), authController.changePassword);
 
 export default router;

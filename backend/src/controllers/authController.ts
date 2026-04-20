@@ -117,4 +117,31 @@ export const authController = {
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   },
+
+  // PUT /api/auth/change-password
+  async changePassword(req: AuthRequest, res: Response): Promise<void> {
+    const { senha_atual, nova_senha } = req.body;
+
+    try {
+      const { rows } = await pool.query('SELECT senha_hash FROM usuarios WHERE id = $1', [req.userId]);
+      if (rows.length === 0) {
+        res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+        return;
+      }
+
+      const passwordMatch = await bcrypt.compare(senha_atual, rows[0].senha_hash);
+      if (!passwordMatch) {
+        res.status(401).json({ success: false, message: 'Senha atual incorreta' });
+        return;
+      }
+
+      const nova_hash = await bcrypt.hash(nova_senha, 12);
+      await pool.query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [nova_hash, req.userId]);
+
+      res.json({ success: true, message: 'Senha alterada com sucesso' });
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+  },
 };

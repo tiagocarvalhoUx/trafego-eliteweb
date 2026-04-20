@@ -9,6 +9,43 @@
   let loading = true;
   let collecting: Record<number, boolean> = {};
 
+  let senhaAtual = '';
+  let novaSenha = '';
+  let confirmarSenha = '';
+  let savingPassword = false;
+
+  async function changePassword() {
+    if (novaSenha !== confirmarSenha) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
+    if (novaSenha.length < 6) {
+      toast.error('Nova senha deve ter no mínimo 6 caracteres');
+      return;
+    }
+    savingPassword = true;
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senha_atual: senhaAtual, nova_senha: novaSenha }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Senha alterada com sucesso!');
+        senhaAtual = '';
+        novaSenha = '';
+        confirmarSenha = '';
+      } else {
+        toast.error(data.message || 'Erro ao alterar senha');
+      }
+    } catch {
+      toast.error('Erro ao alterar senha');
+    } finally {
+      savingPassword = false;
+    }
+  }
+
   onMount(async () => {
     try {
       accounts = await socialService.getAccounts();
@@ -112,6 +149,28 @@
         {/each}
       </div>
     {/if}
+  </div>
+
+  <!-- Change Password -->
+  <div class="card mb-6">
+    <h2 class="text-base font-semibold text-white mb-4">Alterar Senha</h2>
+    <div class="space-y-3 max-w-sm">
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Senha atual</label>
+        <input type="password" bind:value={senhaAtual} class="input w-full" placeholder="••••••••" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Nova senha</label>
+        <input type="password" bind:value={novaSenha} class="input w-full" placeholder="••••••••" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Confirmar nova senha</label>
+        <input type="password" bind:value={confirmarSenha} class="input w-full" placeholder="••••••••" />
+      </div>
+      <button on:click={changePassword} disabled={savingPassword} class="btn-primary text-sm">
+        {savingPassword ? 'Salvando...' : 'Alterar senha'}
+      </button>
+    </div>
   </div>
 
   <!-- Connect New Accounts -->

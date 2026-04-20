@@ -37,6 +37,14 @@ export const schemas = {
     senha: Joi.string().required(),
   }),
 
+  changePassword: Joi.object({
+    senha_atual: Joi.string().required().messages({ 'any.required': 'Senha atual é obrigatória' }),
+    nova_senha: Joi.string().min(6).required().messages({
+      'string.min': 'Nova senha deve ter no mínimo 6 caracteres',
+      'any.required': 'Nova senha é obrigatória',
+    }),
+  }),
+
   createLead: Joi.object({
     nome: Joi.string().max(100).optional(),
     usuario_plataforma: Joi.string().required(),
